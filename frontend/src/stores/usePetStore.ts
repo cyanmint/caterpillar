@@ -15,10 +15,13 @@ const DEFAULT_STATS: PetStats = {
 interface PetState {
   stats: PetStats;
   reactionEmoji: string | null;
+  /** Number of body segments (not counting the head); grows when pills are taken */
+  segments: number;
   loadPet: () => Promise<void>;
   recalculate: (allLogs: DoseLog[], medications: Medication[]) => Promise<void>;
   updatePetName: (name: string) => Promise<void>;
   triggerReaction: (emoji: string) => void;
+  addSegment: () => void;
 }
 
 function dateStr(d: Date): string {
@@ -34,6 +37,12 @@ function addDays(date: Date, days: number): Date {
 export const usePetStore = create<PetState>((set, get) => ({
   stats: DEFAULT_STATS,
   reactionEmoji: null,
+  segments: 3,
+
+  addSegment() {
+    const current = get().segments;
+    if (current < 20) set({ segments: current + 1 });
+  },
 
   triggerReaction(emoji) {
     set({ reactionEmoji: emoji });

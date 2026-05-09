@@ -15,10 +15,15 @@ const DIRS = [
   { dx: 0,  dy: -1 }, // 3 up
 ] as const;
 
-/** CSS transform that rotates the SVG to face the given direction index. */
-function dirTransform(idx: number): string {
-  // SVG faces right by default; rotate clockwise to face other directions
-  return `rotate(${idx * 90}deg)`;
+/** CSS transform that rotates the SVG to face the given direction index.
+ *  The CaterpillarSvg has its HEAD on the LEFT of the viewBox, so we need
+ *  an extra 180° so the head leads instead of trails the movement direction.
+ *  Base offsets:
+ *    idx 0 (right) → 180°   idx 1 (down) → 270°
+ *    idx 2 (left)  → 360°   idx 3 (up)  →  90°
+ */
+function dirBaseAngle(idx: number): number {
+  return 180 + idx * 90;
 }
 
 export function DraggableCaterpillar() {
@@ -29,15 +34,21 @@ export function DraggableCaterpillar() {
   const xRef = useRef(40);
   const yRef = useRef<number | null>(null); // initialised after mount
   const dirIdxRef = useRef(0); // start moving right
+  const rotationRef = useRef(dirBaseAngle(0)); // accumulated degrees — avoids CSS wrap-around
   const isDraggingRef = useRef(false);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
 
   // Only triggers a re-render when direction changes (not every frame)
-  const [svgTransform, setSvgTransform] = useState(dirTransform(0));
+  const [svgTransform, setSvgTransform] = useState(`rotate(${dirBaseAngle(0)}deg)`);
 
-  function applyDir(idx: number) {
-    dirIdxRef.current = idx;
-    setSvgTransform(dirTransform(idx));
+  function applyDir(newIdx: number) {
+    const oldIdx = dirIdxRef.current;
+    // Compute the signed delta (-90 or +90) so the CSS transition always takes the short arc
+    const steps = ((newIdx - oldIdx) + 4) % 4; // 1 or 3
+    const delta = steps === 3 ? -90 : steps * 90; // −90 or +90 (or +180 on rare 180° flip)
+    rotationRef.current += delta;
+    dirIdxRef.current = newIdx;
+    setSvgTransform(`rotate(${rotationRef.current}deg)`);
   }
 
   // Place near the bottom of the viewport on first mount
