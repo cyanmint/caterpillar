@@ -2,15 +2,17 @@ import { useEffect, useState } from "react";
 import { PillEditor } from "./features/pills/PillEditor";
 import { ScheduleView } from "./features/schedule/ScheduleView";
 import { PetView } from "./features/pet/PetView";
+import { InventoryView } from "./features/inventory/InventoryView";
 import { useMedStore } from "./stores/useMedStore";
 import { usePetStore } from "./stores/usePetStore";
 
-type TabId = "schedule" | "pills" | "pet";
+type TabId = "schedule" | "pills" | "inventory" | "pet";
 
 const tabs: { id: TabId; label: string; icon: string }[] = [
   { id: "schedule", label: "Schedule", icon: "📅" },
-  { id: "pills",    label: "Pills",    icon: "💊" },
-  { id: "pet",      label: "Pet",      icon: "🐛" },
+  { id: "pills", label: "Pills", icon: "💊" },
+  { id: "inventory", label: "Inventory", icon: "📦" },
+  { id: "pet", label: "Pet", icon: "🐛" },
 ];
 
 export default function App() {
@@ -35,6 +37,7 @@ export default function App() {
             <PillEditor />
           </div>
         )}
+        {activeTab === "inventory" && <InventoryView />}
         {activeTab === "pet" && <PetView />}
       </div>
 

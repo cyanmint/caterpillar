@@ -18,6 +18,7 @@ export function ScheduleView() {
   const medications = useMedStore((s) => s.medications);
   const todayLogs = useMedStore((s) => s.todayLogs);
   const logDose = useMedStore((s) => s.logDose);
+  const consumePill = useMedStore((s) => s.consumePill);
   const loadAll = useMedStore((s) => s.loadAll);
   const recalculate = usePetStore((s) => s.recalculate);
 
@@ -58,6 +59,9 @@ export function ScheduleView() {
       createdAt: new Date().toISOString(),
     };
     await logDose(log);
+    if (status === "taken") {
+      await consumePill(medicationId, 1);
+    }
     // Reload all logs then recalculate pet
     const allLogs = await db.dose_logs.toArray();
     await recalculate(allLogs, medications);
@@ -113,7 +117,7 @@ export function ScheduleView() {
 
         return (
           <div
-            key={scheduledFor}
+            key={`${medicationId}|${scheduledFor}`}
             className={`rounded-xl border bg-white p-4 shadow-sm ${existingLog ? statusStyle[existingLog.status] : "border-slate-200"}`}
           >
             <div className="flex items-center gap-3">
@@ -124,6 +128,7 @@ export function ScheduleView() {
                 divider={med.divider}
                 customPath={undefined}
                 drugName={med.drugName}
+                imprintText={med.imprintText}
                 className="h-12 w-20 flex-shrink-0"
               />
               <div className="flex-1 min-w-0">

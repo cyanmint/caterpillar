@@ -10,6 +10,8 @@ interface MedState {
   deleteMedication: (id: string) => Promise<void>;
   logDose: (log: DoseLog) => Promise<void>;
   loadTodayLogs: () => Promise<void>;
+  setRemainingPills: (id: string, remainingPills: number) => Promise<void>;
+  consumePill: (id: string, amount?: number) => Promise<void>;
 }
 
 function todayPrefix(): string {
@@ -52,5 +54,19 @@ export const useMedStore = create<MedState>((set, get) => ({
       .startsWith(prefix)
       .toArray();
     set({ todayLogs });
+  },
+
+  async setRemainingPills(id, remainingPills) {
+    const safeRemaining = Math.max(0, Math.floor(remainingPills));
+    await db.medications.update(id, { remainingPills: safeRemaining, updatedAt: new Date().toISOString() });
+    await get().loadAll();
+  },
+
+  async consumePill(id, amount = 1) {
+    const med = await db.medications.get(id);
+    if (!med) return;
+    const nextRemaining = Math.max(0, (med.remainingPills ?? 0) - Math.max(1, Math.floor(amount)));
+    await db.medications.update(id, { remainingPills: nextRemaining, updatedAt: new Date().toISOString() });
+    await get().loadAll();
   },
 }));

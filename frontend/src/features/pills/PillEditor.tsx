@@ -37,6 +37,25 @@ const commonMedicalPalette = [
   "#2C3E50",
 ];
 
+function clampColor(value: number): number {
+  return Math.max(0, Math.min(255, value));
+}
+
+function adjustHex(hex: string, amount: number): string {
+  const normalized = hex.replace("#", "");
+  const expanded =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((char) => `${char}${char}`)
+          .join("")
+      : normalized;
+  const r = clampColor(parseInt(expanded.slice(0, 2), 16) + amount);
+  const g = clampColor(parseInt(expanded.slice(2, 4), 16) + amount);
+  const b = clampColor(parseInt(expanded.slice(4, 6), 16) + amount);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
 export function PillSvgPreview({
   shape,
   primaryColor,
@@ -45,6 +64,7 @@ export function PillSvgPreview({
   customPath,
   highContrast,
   drugName,
+  imprintText,
   className,
 }: {
   shape: PillShape;
@@ -54,10 +74,14 @@ export function PillSvgPreview({
   customPath?: string;
   highContrast?: boolean;
   drugName?: string;
+  imprintText?: string;
   className?: string;
 }) {
   const activePath = customPath?.trim() || shapePath[shape];
   const gradId = `pg-${shape}-${primaryColor.replace("#", "")}-${secondaryColor.replace("#", "")}`;
+  const highlightId = `${gradId}-highlight`;
+  const shadowColor = adjustHex(primaryColor, -55);
+  const midColor = adjustHex(primaryColor, 25);
   return (
     <svg
       viewBox="0 0 256 140"
@@ -66,10 +90,17 @@ export function PillSvgPreview({
       className={className}
     >
       <defs>
-        <linearGradient id={gradId} x1="0" x2="1">
-          <stop offset="0%" stopColor={primaryColor} />
-          <stop offset="100%" stopColor={secondaryColor} />
+        <linearGradient id={gradId} x1="0.1" y1="0.2" x2="0.95" y2="0.8">
+          <stop offset="0%" stopColor={adjustHex(primaryColor, 50)} />
+          <stop offset="35%" stopColor={midColor} />
+          <stop offset="70%" stopColor={secondaryColor} />
+          <stop offset="100%" stopColor={shadowColor} />
         </linearGradient>
+        <radialGradient id={highlightId} cx="30%" cy="25%" r="65%">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.65" />
+          <stop offset="45%" stopColor="#FFFFFF" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+        </radialGradient>
       </defs>
       <path
         d={activePath}
@@ -77,6 +108,7 @@ export function PillSvgPreview({
         stroke={highContrast ? "#000000" : "#333333"}
         strokeWidth={highContrast ? 4 : 2}
       />
+      <path d={activePath} fill={`url(#${highlightId})`} />
       {divider !== "none" && (
         <line x1="128" y1="32" x2="128" y2="108" stroke="#111111" strokeWidth="4" strokeLinecap="round" />
       )}
@@ -85,6 +117,20 @@ export function PillSvgPreview({
           <line x1="84" y1="32" x2="84" y2="108" stroke="#111111" strokeWidth="2" strokeLinecap="round" />
           <line x1="172" y1="32" x2="172" y2="108" stroke="#111111" strokeWidth="2" strokeLinecap="round" />
         </>
+      )}
+      {imprintText?.trim() && (
+        <text
+          x="128"
+          y="77"
+          textAnchor="middle"
+          fontSize="20"
+          fontWeight="700"
+          fill={highContrast ? "#000000" : "#334155"}
+          fontFamily="system-ui, -apple-system, sans-serif"
+          letterSpacing="1"
+        >
+          {imprintText.trim().slice(0, 10).toUpperCase()}
+        </text>
       )}
     </svg>
   );
@@ -102,6 +148,7 @@ export function PillEditor({ initialValue, highContrast = false }: PillEditorPro
   const [divider, setDivider] = useState<PillDivider>(initialValue?.divider ?? "none");
   const [customPath, setCustomPath] = useState(initialValue?.customPath ?? "");
   const [scheduleTimes, setScheduleTimes] = useState<string[]>(["08:00"]);
+  const [imprintText, setImprintText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<string>("");
 
@@ -121,8 +168,13 @@ export function PillEditor({ initialValue, highContrast = false }: PillEditorPro
   const svgMarkup = useMemo(() => {
     const contrastStroke = highContrast ? "#000000" : "#333333";
     const gradId = "pillGradient";
-    return `<svg viewBox="0 0 256 140" role="img" aria-label="${drugName || "pill template"}" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="${gradId}" x1="0" x2="1"><stop offset="0%" stop-color="${primaryColor}" /><stop offset="100%" stop-color="${secondaryColor}" /></linearGradient></defs><path d="${activePath}" fill="url(#${gradId})" stroke="${contrastStroke}" stroke-width="${highContrast ? 4 : 2}" />${dividerMarkup}</svg>`;
-  }, [activePath, dividerMarkup, drugName, highContrast, primaryColor, secondaryColor]);
+    const highlightId = "pillHighlight";
+    const safeImprint = imprintText.trim().slice(0, 10).toUpperCase();
+    const imprintMarkup = safeImprint
+      ? `<text x="128" y="77" text-anchor="middle" font-size="20" font-weight="700" fill="${highContrast ? "#000000" : "#334155"}" font-family="system-ui, -apple-system, sans-serif" letter-spacing="1">${safeImprint}</text>`
+      : "";
+    return `<svg viewBox="0 0 256 140" role="img" aria-label="${drugName || "pill template"}" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="${gradId}" x1="0.1" y1="0.2" x2="0.95" y2="0.8"><stop offset="0%" stop-color="${adjustHex(primaryColor, 50)}" /><stop offset="35%" stop-color="${adjustHex(primaryColor, 25)}" /><stop offset="70%" stop-color="${secondaryColor}" /><stop offset="100%" stop-color="${adjustHex(primaryColor, -55)}" /></linearGradient><radialGradient id="${highlightId}" cx="30%" cy="25%" r="65%"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.65" /><stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.18" /><stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" /></radialGradient></defs><path d="${activePath}" fill="url(#${gradId})" stroke="${contrastStroke}" stroke-width="${highContrast ? 4 : 2}" /><path d="${activePath}" fill="url(#${highlightId})" />${dividerMarkup}${imprintMarkup}</svg>`;
+  }, [activePath, dividerMarkup, drugName, highContrast, imprintText, primaryColor, secondaryColor]);
 
   function addTime() {
     setScheduleTimes((prev) => [...prev, "12:00"]);
@@ -151,6 +203,8 @@ export function PillEditor({ initialValue, highContrast = false }: PillEditorPro
         drugName: drugName.trim(),
         dosageLabel: dosageLabel.trim() || undefined,
         pillsPerBox: pillsPerBox ? parseInt(pillsPerBox, 10) : undefined,
+        remainingPills: pillsPerBox ? parseInt(pillsPerBox, 10) : 0,
+        imprintText: imprintText.trim() || undefined,
         shape,
         primaryColor,
         secondaryColor,
@@ -169,6 +223,7 @@ export function PillEditor({ initialValue, highContrast = false }: PillEditorPro
       setPillsPerBox("");
       setScheduleTimes(["08:00"]);
       setCustomPath("");
+      setImprintText("");
     } catch {
       showToast("❌ Failed to save. Please try again.");
     } finally {
@@ -220,6 +275,17 @@ export function PillEditor({ initialValue, highContrast = false }: PillEditorPro
           />
         </label>
       </div>
+
+      <label className="block text-sm font-medium">
+        Pill text imprint
+        <input
+          className="mt-1 w-full rounded-md border border-slate-300 p-2"
+          value={imprintText}
+          onChange={(e) => setImprintText(e.target.value)}
+          placeholder="e.g. RX10"
+          maxLength={10}
+        />
+      </label>
 
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="block text-sm font-medium">
@@ -336,6 +402,7 @@ export function PillEditor({ initialValue, highContrast = false }: PillEditorPro
           customPath={customPath}
           highContrast={highContrast}
           drugName={drugName}
+          imprintText={imprintText}
           className="mx-auto h-28 w-full max-w-xs"
         />
       </div>

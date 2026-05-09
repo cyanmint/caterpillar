@@ -5,6 +5,8 @@ export interface Medication {
   drugName: string;
   dosageLabel?: string;
   pillsPerBox?: number;
+  remainingPills: number;
+  imprintText?: string;
   shape: "oblong" | "round" | "capsule" | "triangular";
   primaryColor: string;
   secondaryColor?: string;
