@@ -81,11 +81,22 @@ export function PillSvgPreview({
   className?: string;
 }) {
   const activePath = customPath?.trim() || shapePath[shape];
-  const gradId = `pg-${shape}-${primaryColor.replace("#", "")}-${secondaryColor.replace("#", "")}`;
-  const highlightId = `${gradId}-highlight`;
-  const clipId = `${gradId}-clip`;
+  // Capsules get bicolor (left/right) rendering; custom paths fall back to gradient
+  const isCapsuleBicolor = shape === "capsule" && !customPath?.trim();
+  const baseId = `pg-${shape}-${primaryColor.replace("#", "")}-${secondaryColor.replace("#", "")}`;
+  const highlightId = `${baseId}-highlight`;
+  const clipId = `${baseId}-clip`;
+  // Capsule-specific IDs
+  const capLeftGradId = `${baseId}-cl`;
+  const capRightGradId = `${baseId}-cr`;
+  const capLeftClipId = `${baseId}-cll`;
+  const capRightClipId = `${baseId}-clr`;
+  // Regular gradient IDs
+  const gradId = baseId;
   const shadowColor = adjustHex(primaryColor, -55);
   const midColor = adjustHex(primaryColor, 25);
+  const stroke = highContrast ? "#000000" : "#333333";
+  const strokeWidth = highContrast ? 4 : 2;
   return (
     <svg
       viewBox="0 0 256 140"
@@ -94,12 +105,36 @@ export function PillSvgPreview({
       className={className}
     >
       <defs>
-        <linearGradient id={gradId} x1="0.1" y1="0.2" x2="0.95" y2="0.8">
-          <stop offset="0%" stopColor={adjustHex(primaryColor, 50)} />
-          <stop offset="35%" stopColor={midColor} />
-          <stop offset="70%" stopColor={secondaryColor} />
-          <stop offset="100%" stopColor={shadowColor} />
-        </linearGradient>
+        {isCapsuleBicolor ? (
+          <>
+            {/* Left-half gradient (primaryColor, vertical shading) */}
+            <linearGradient id={capLeftGradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={adjustHex(primaryColor, 45)} />
+              <stop offset="40%" stopColor={adjustHex(primaryColor, 10)} />
+              <stop offset="100%" stopColor={adjustHex(primaryColor, -40)} />
+            </linearGradient>
+            {/* Right-half gradient (secondaryColor, vertical shading) */}
+            <linearGradient id={capRightGradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={adjustHex(secondaryColor, 45)} />
+              <stop offset="40%" stopColor={adjustHex(secondaryColor, 10)} />
+              <stop offset="100%" stopColor={adjustHex(secondaryColor, -40)} />
+            </linearGradient>
+            {/* Rect clips to isolate each half */}
+            <clipPath id={capLeftClipId}>
+              <rect x="0" y="0" width="128" height="140" />
+            </clipPath>
+            <clipPath id={capRightClipId}>
+              <rect x="128" y="0" width="128" height="140" />
+            </clipPath>
+          </>
+        ) : (
+          <linearGradient id={gradId} x1="0.1" y1="0.2" x2="0.95" y2="0.8">
+            <stop offset="0%" stopColor={adjustHex(primaryColor, 50)} />
+            <stop offset="35%" stopColor={midColor} />
+            <stop offset="70%" stopColor={secondaryColor} />
+            <stop offset="100%" stopColor={shadowColor} />
+          </linearGradient>
+        )}
         <radialGradient id={highlightId} cx="30%" cy="25%" r="65%">
           <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.65" />
           <stop offset="45%" stopColor="#FFFFFF" stopOpacity="0.18" />
@@ -109,13 +144,25 @@ export function PillSvgPreview({
           <path d={activePath} />
         </clipPath>
       </defs>
-      <path
-        d={activePath}
-        fill={`url(#${gradId})`}
-        stroke={highContrast ? "#000000" : "#333333"}
-        strokeWidth={highContrast ? 4 : 2}
-      />
+
+      {isCapsuleBicolor ? (
+        <>
+          {/* Left half filled with primaryColor */}
+          <path d={activePath} fill={`url(#${capLeftGradId})`} clipPath={`url(#${capLeftClipId})`} />
+          {/* Right half filled with secondaryColor */}
+          <path d={activePath} fill={`url(#${capRightGradId})`} clipPath={`url(#${capRightClipId})`} />
+          {/* Seam line between the two halves */}
+          <line x1="128" y1="0" x2="128" y2="140" stroke="#44444488" strokeWidth="1.5" clipPath={`url(#${clipId})`} />
+          {/* Outline */}
+          <path d={activePath} fill="none" stroke={stroke} strokeWidth={strokeWidth} />
+        </>
+      ) : (
+        <path d={activePath} fill={`url(#${gradId})`} stroke={stroke} strokeWidth={strokeWidth} />
+      )}
+
+      {/* Shared gloss highlight overlay */}
       <path d={activePath} fill={`url(#${highlightId})`} />
+
       {divider !== "none" && (
         <g clipPath={`url(#${clipId})`}>
           <line x1="128" y1="0" x2="128" y2="140" stroke="#111111" strokeWidth="4" strokeLinecap="round" />
@@ -168,25 +215,40 @@ export function PillEditor({ editingMed, onDone, highContrast = false }: PillEdi
 
   const dividerMarkup = useMemo(() => {
     if (divider === "none") return "";
-    const base = `<line x1="128" y1="32" x2="128" y2="108" stroke="#111111" stroke-width="4" stroke-linecap="round" />`;
-    if (divider === "half") return base;
-    return [
-      base,
-      `<line x1="84" y1="32" x2="84" y2="108" stroke="#111111" stroke-width="2" stroke-linecap="round" />`,
-      `<line x1="172" y1="32" x2="172" y2="108" stroke="#111111" stroke-width="2" stroke-linecap="round" />`,
-    ].join("");
-  }, [divider]);
+    const clipDef = `<clipPath id="pillClip"><path d="${activePath}" /></clipPath>`;
+    const lines =
+      divider === "half"
+        ? `<line x1="128" y1="0" x2="128" y2="140" stroke="#111111" stroke-width="4" stroke-linecap="round" />`
+        : `<line x1="128" y1="0" x2="128" y2="140" stroke="#111111" stroke-width="4" stroke-linecap="round" /><line x1="84" y1="0" x2="84" y2="140" stroke="#111111" stroke-width="2" stroke-linecap="round" /><line x1="172" y1="0" x2="172" y2="140" stroke="#111111" stroke-width="2" stroke-linecap="round" />`;
+    return { clipDef, lines: `<g clip-path="url(#pillClip)">${lines}</g>` };
+  }, [divider, activePath]);
 
   const svgMarkup = useMemo(() => {
     const contrastStroke = highContrast ? "#000000" : "#333333";
-    const gradId = "pillGradient";
+    const strokeWidth = highContrast ? 4 : 2;
     const highlightId = "pillHighlight";
     const safeImprint = imprintText.trim().slice(0, 10).toUpperCase();
     const imprintMarkup = safeImprint
       ? `<text x="128" y="77" text-anchor="middle" font-size="20" font-weight="700" fill="${highContrast ? "#000000" : "#334155"}" font-family="system-ui, -apple-system, sans-serif" letter-spacing="1">${safeImprint}</text>`
       : "";
-    return `<svg viewBox="0 0 256 140" role="img" aria-label="${drugName || "pill template"}" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="${gradId}" x1="0.1" y1="0.2" x2="0.95" y2="0.8"><stop offset="0%" stop-color="${adjustHex(primaryColor, 50)}" /><stop offset="35%" stop-color="${adjustHex(primaryColor, 25)}" /><stop offset="70%" stop-color="${secondaryColor}" /><stop offset="100%" stop-color="${adjustHex(primaryColor, -55)}" /></linearGradient><radialGradient id="${highlightId}" cx="30%" cy="25%" r="65%"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.65" /><stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.18" /><stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" /></radialGradient></defs><path d="${activePath}" fill="url(#${gradId})" stroke="${contrastStroke}" stroke-width="${highContrast ? 4 : 2}" /><path d="${activePath}" fill="url(#${highlightId})" />${dividerMarkup}${imprintMarkup}</svg>`;
-  }, [activePath, dividerMarkup, drugName, highContrast, imprintText, primaryColor, secondaryColor]);
+    const highlightGrad = `<radialGradient id="${highlightId}" cx="30%" cy="25%" r="65%"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.65" /><stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.18" /><stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" /></radialGradient>`;
+    const divClipDef = dividerMarkup ? dividerMarkup.clipDef : "";
+    const divLines = dividerMarkup ? dividerMarkup.lines : "";
+
+    const isCapsuleBicolor = shape === "capsule" && !customPath.trim();
+    if (isCapsuleBicolor) {
+      const leftGrad = `<linearGradient id="pillLeft" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${adjustHex(primaryColor, 45)}" /><stop offset="40%" stop-color="${adjustHex(primaryColor, 10)}" /><stop offset="100%" stop-color="${adjustHex(primaryColor, -40)}" /></linearGradient>`;
+      const rightGrad = `<linearGradient id="pillRight" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${adjustHex(secondaryColor, 45)}" /><stop offset="40%" stop-color="${adjustHex(secondaryColor, 10)}" /><stop offset="100%" stop-color="${adjustHex(secondaryColor, -40)}" /></linearGradient>`;
+      const halfClips = `<clipPath id="pillCapL"><rect x="0" y="0" width="128" height="140" /></clipPath><clipPath id="pillCapR"><rect x="128" y="0" width="128" height="140" /></clipPath><clipPath id="pillShapeClip"><path d="${activePath}" /></clipPath>`;
+      const body = `<path d="${activePath}" fill="url(#pillLeft)" clip-path="url(#pillCapL)" /><path d="${activePath}" fill="url(#pillRight)" clip-path="url(#pillCapR)" /><line x1="128" y1="0" x2="128" y2="140" stroke="#44444488" stroke-width="1.5" clip-path="url(#pillShapeClip)" /><path d="${activePath}" fill="none" stroke="${contrastStroke}" stroke-width="${strokeWidth}" />`;
+      return `<svg viewBox="0 0 256 140" role="img" aria-label="${drugName || "pill template"}" xmlns="http://www.w3.org/2000/svg"><defs>${leftGrad}${rightGrad}${highlightGrad}${halfClips}${divClipDef}</defs>${body}<path d="${activePath}" fill="url(#${highlightId})" />${divLines}${imprintMarkup}</svg>`;
+    }
+
+    const gradId = "pillGradient";
+    const grad = `<linearGradient id="${gradId}" x1="0.1" y1="0.2" x2="0.95" y2="0.8"><stop offset="0%" stop-color="${adjustHex(primaryColor, 50)}" /><stop offset="35%" stop-color="${adjustHex(primaryColor, 25)}" /><stop offset="70%" stop-color="${secondaryColor}" /><stop offset="100%" stop-color="${adjustHex(primaryColor, -55)}" /></linearGradient>`;
+    const shapeClip = `<clipPath id="pillClip"><path d="${activePath}" /></clipPath>`;
+    return `<svg viewBox="0 0 256 140" role="img" aria-label="${drugName || "pill template"}" xmlns="http://www.w3.org/2000/svg"><defs>${grad}${highlightGrad}${shapeClip}</defs><path d="${activePath}" fill="url(#${gradId})" stroke="${contrastStroke}" stroke-width="${strokeWidth}" /><path d="${activePath}" fill="url(#${highlightId})" />${divLines}${imprintMarkup}</svg>`;
+  }, [activePath, customPath, dividerMarkup, drugName, highContrast, imprintText, primaryColor, secondaryColor, shape]);
 
   function addTime() {
     setScheduleTimes((prev) => [...prev, "12:00"]);
@@ -364,7 +426,7 @@ export function PillEditor({ editingMed, onDone, highContrast = false }: PillEdi
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm font-medium" htmlFor="pill-primary-color">
-          Primary color
+          {shape === "capsule" ? "Left half color" : "Primary color"}
           <input
             id="pill-primary-color"
             className="mt-1 block h-10 w-full rounded-md border border-slate-300 p-1"
@@ -374,7 +436,7 @@ export function PillEditor({ editingMed, onDone, highContrast = false }: PillEdi
           />
         </label>
         <label className="block text-sm font-medium" htmlFor="pill-secondary-color">
-          Secondary color
+          {shape === "capsule" ? "Right half color" : "Secondary color"}
           <input
             id="pill-secondary-color"
             className="mt-1 block h-10 w-full rounded-md border border-slate-300 p-1"
@@ -386,6 +448,9 @@ export function PillEditor({ editingMed, onDone, highContrast = false }: PillEdi
       </div>
 
       <div className="flex flex-wrap gap-2">
+        <p className="w-full text-xs text-slate-500">
+          {shape === "capsule" ? "Quick pick for left half color:" : "Quick pick for primary color:"}
+        </p>
         {commonMedicalPalette.map((color) => (
           <button
             key={color}
