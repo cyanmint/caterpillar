@@ -35,6 +35,7 @@ const commonMedicalPalette = [
   "#8E44AD",
   "#2C3E50",
 ];
+const OFFLINE_PILL_DRAFTS_KEY = "caterpillar.offline-pill-drafts";
 
 export function PillEditor({ initialValue, highContrast = false, onSave }: PillEditorProps) {
   const [drugName, setDrugName] = useState(initialValue?.drugName ?? "");
@@ -44,6 +45,7 @@ export function PillEditor({ initialValue, highContrast = false, onSave }: PillE
   const [divider, setDivider] = useState<PillDivider>(initialValue?.divider ?? "none");
   const [customPath, setCustomPath] = useState(initialValue?.customPath ?? "");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string>("");
 
   const activePath = customPath.trim() || shapePath[shape];
 
@@ -74,21 +76,45 @@ export function PillEditor({ initialValue, highContrast = false, onSave }: PillE
 </svg>`.trim();
   }, [activePath, dividerMarkup, drugName, highContrast, primaryColor, secondaryColor]);
 
+  function saveOfflineDraft(draft: PillTemplateDraft, svg: string) {
+    if (typeof window === "undefined") return;
+    const existingRaw = window.localStorage.getItem(OFFLINE_PILL_DRAFTS_KEY);
+    let existing: Array<PillTemplateDraft & { svgMarkup: string; savedAt: string }> = [];
+    if (existingRaw) {
+      try {
+        existing = JSON.parse(existingRaw) as Array<PillTemplateDraft & { svgMarkup: string; savedAt: string }>;
+      } catch {
+        existing = [];
+      }
+    }
+    const next = [{ ...draft, svgMarkup: svg, savedAt: new Date().toISOString() }, ...existing].slice(0, 20);
+    window.localStorage.setItem(OFFLINE_PILL_DRAFTS_KEY, JSON.stringify(next));
+  }
+
   async function handleSave() {
-    if (!onSave) return;
+    const draft: PillTemplateDraft = {
+      drugName,
+      shape,
+      primaryColor,
+      secondaryColor,
+      divider,
+      customPath: customPath || undefined,
+    };
+
     setIsSaving(true);
     try {
-      await onSave(
-        {
-          drugName,
-          shape,
-          primaryColor,
-          secondaryColor,
-          divider,
-          customPath: customPath || undefined,
-        },
-        svgMarkup,
-      );
+      const isOnline = typeof navigator === "undefined" ? true : navigator.onLine;
+      if (!onSave || !isOnline) {
+        saveOfflineDraft(draft, svgMarkup);
+        setSaveMessage("Saved locally. It will be available offline until the server is reachable.");
+        return;
+      }
+
+      await onSave(draft, svgMarkup);
+      setSaveMessage("Saved to the server.");
+    } catch {
+      saveOfflineDraft(draft, svgMarkup);
+      setSaveMessage("Could not reach the server. Saved locally for offline use.");
     } finally {
       setIsSaving(false);
     }
@@ -99,6 +125,7 @@ export function PillEditor({ initialValue, highContrast = false, onSave }: PillE
       <header className="space-y-1">
         <h2 className="text-lg font-semibold">Pill Editor</h2>
         <p className="text-sm text-slate-600">Assemble a 1:1 vector pill template and save to the global repository.</p>
+        {saveMessage ? <p className="text-sm text-slate-700" aria-live="polite">{saveMessage}</p> : null}
       </header>
 
       <label className="block text-sm font-medium">
