@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { CaterpillarSvg } from "./CaterpillarSvg";
 import { usePetStore } from "../../stores/usePetStore";
 
-const SIZE = 80; // bounding box used for wall collision
-const SPEED = 1.5; // px per RAF frame (~90px/s at 60fps)
-// ~0.25% chance per frame to take a random 90-degree turn (~2–3 turns/min)
-const RANDOM_TURN_CHANCE = 0.0025;
+const SIZE = 140; // bounding box used for wall collision
+const SPEED = 2.0; // px per RAF frame (~120px/s at 60fps)
+// ~0.3% chance per frame to take a random 90-degree turn (~2–3 turns/min)
+const RANDOM_TURN_CHANCE = 0.003;
 
 // Cardinal directions in order: right, down, left, up (clockwise)
 const DIRS = [
@@ -160,8 +160,8 @@ export function DraggableCaterpillar() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        {/* Rotate SVG to face the direction of travel */}
-        <div style={{ transform: svgTransform, width: "100%", transformOrigin: "center" }}>
+        {/* Rotate SVG to face the direction of travel; transition gives a snake-pivot feel */}
+        <div style={{ transform: svgTransform, width: "100%", transformOrigin: "center", transition: "transform 0.15s ease" }}>
           <CaterpillarSvg mood={mood} className="w-full h-auto drop-shadow" />
         </div>
 
