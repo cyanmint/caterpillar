@@ -2,6 +2,14 @@ import { useState } from "react";
 import { useMedStore } from "../../stores/useMedStore";
 import { PillSvgPreview } from "../pills/PillEditor";
 
+function formatPillCount(n: number): string {
+  const whole = Math.floor(n);
+  const frac = Math.round((n - whole) * 100) / 100;
+  if (frac === 0) return whole.toString();
+  const fracStr = frac === 0.5 ? "½" : frac === 0.25 ? "¼" : frac === 0.75 ? "¾" : frac.toFixed(2).slice(1);
+  return whole > 0 ? `${whole}${fracStr}` : fracStr;
+}
+
 export function InventoryView() {
   const medications = useMedStore((s) => s.medications);
   const setRemainingPills = useMedStore((s) => s.setRemainingPills);
@@ -74,7 +82,7 @@ export function InventoryView() {
             <div className="mt-3 flex items-end justify-between gap-3">
               <div>
                 <p className="text-xs text-slate-500">Remaining pills</p>
-                <p className="text-2xl font-bold text-slate-900">{remaining}</p>
+                <p className="text-2xl font-bold text-slate-900">{formatPillCount(remaining)}</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-500">Per box</p>
@@ -82,6 +90,7 @@ export function InventoryView() {
               </div>
             </div>
 
+            {/* Whole-pill adjustments */}
             <div className="mt-4 grid grid-cols-4 gap-2">
               <button
                 type="button"
@@ -89,7 +98,7 @@ export function InventoryView() {
                 disabled={isBusy || remaining <= 0}
                 className="rounded-md border border-slate-300 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                -1
+                −1
               </button>
               <button
                 type="button"
@@ -114,6 +123,42 @@ export function InventoryView() {
                 className="rounded-md bg-slate-900 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Restock
+              </button>
+            </div>
+
+            {/* Fractional adjustments */}
+            <div className="mt-2 grid grid-cols-4 gap-2">
+              <button
+                type="button"
+                onClick={() => adjust(med.id, remaining, -0.25)}
+                disabled={isBusy || remaining <= 0}
+                className="rounded-md border border-slate-300 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                −¼
+              </button>
+              <button
+                type="button"
+                onClick={() => adjust(med.id, remaining, -0.5)}
+                disabled={isBusy || remaining <= 0}
+                className="rounded-md border border-slate-300 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                −½
+              </button>
+              <button
+                type="button"
+                onClick={() => adjust(med.id, remaining, 0.5)}
+                disabled={isBusy}
+                className="rounded-md border border-slate-300 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                +½
+              </button>
+              <button
+                type="button"
+                onClick={() => adjust(med.id, remaining, 0.25)}
+                disabled={isBusy}
+                className="rounded-md border border-slate-300 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                +¼
               </button>
             </div>
           </section>

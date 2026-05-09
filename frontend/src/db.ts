@@ -23,6 +23,8 @@ export interface DoseLog {
   medicationId: string;
   scheduledFor: string; // ISO datetime "2025-05-09T08:00:00"
   takenAt?: string;
+  /** Fractional pill amount consumed: 1, 0.5, or 0.25 */
+  pillAmount?: number;
   status: "taken" | "missed" | "skipped";
   createdAt: string;
 }

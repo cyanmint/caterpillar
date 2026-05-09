@@ -83,6 +83,7 @@ export function PillSvgPreview({
   const activePath = customPath?.trim() || shapePath[shape];
   const gradId = `pg-${shape}-${primaryColor.replace("#", "")}-${secondaryColor.replace("#", "")}`;
   const highlightId = `${gradId}-highlight`;
+  const clipId = `${gradId}-clip`;
   const shadowColor = adjustHex(primaryColor, -55);
   const midColor = adjustHex(primaryColor, 25);
   return (
@@ -104,6 +105,9 @@ export function PillSvgPreview({
           <stop offset="45%" stopColor="#FFFFFF" stopOpacity="0.18" />
           <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
         </radialGradient>
+        <clipPath id={clipId}>
+          <path d={activePath} />
+        </clipPath>
       </defs>
       <path
         d={activePath}
@@ -113,13 +117,15 @@ export function PillSvgPreview({
       />
       <path d={activePath} fill={`url(#${highlightId})`} />
       {divider !== "none" && (
-        <line x1="128" y1="32" x2="128" y2="108" stroke="#111111" strokeWidth="4" strokeLinecap="round" />
-      )}
-      {divider === "quarter" && (
-        <>
-          <line x1="84" y1="32" x2="84" y2="108" stroke="#111111" strokeWidth="2" strokeLinecap="round" />
-          <line x1="172" y1="32" x2="172" y2="108" stroke="#111111" strokeWidth="2" strokeLinecap="round" />
-        </>
+        <g clipPath={`url(#${clipId})`}>
+          <line x1="128" y1="0" x2="128" y2="140" stroke="#111111" strokeWidth="4" strokeLinecap="round" />
+          {divider === "quarter" && (
+            <>
+              <line x1="84" y1="0" x2="84" y2="140" stroke="#111111" strokeWidth="2" strokeLinecap="round" />
+              <line x1="172" y1="0" x2="172" y2="140" stroke="#111111" strokeWidth="2" strokeLinecap="round" />
+            </>
+          )}
+        </g>
       )}
       {imprintText?.trim() && (
         <text
