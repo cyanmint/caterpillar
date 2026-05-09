@@ -1,0 +1,11 @@
+{
+  "name": "Caterpillar Care",
+  "short_name": "Caterpillar",
+  "description": "Medication adherence tracking with pill visuals and pet nurturing.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait",
+  "icons": []
+}

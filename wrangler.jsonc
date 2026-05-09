@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "caterpillar-api",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-04-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "caterpillar",
+      "database_id": "replace-with-cloudflare-d1-database-id"
+    }
+  ]
+}
