@@ -35,7 +35,7 @@ const commonMedicalPalette = [
   "#8E44AD",
   "#2C3E50",
 ];
-const OFFLINE_PILL_DRAFTS_KEY = "caterpillar.offline-pill-drafts";
+const offlineDraftQueue: Array<PillTemplateDraft & { svgMarkup: string; savedAt: string }> = [];
 
 export function PillEditor({ initialValue, highContrast = false, onSave }: PillEditorProps) {
   const [drugName, setDrugName] = useState(initialValue?.drugName ?? "");
@@ -77,18 +77,10 @@ export function PillEditor({ initialValue, highContrast = false, onSave }: PillE
   }, [activePath, dividerMarkup, drugName, highContrast, primaryColor, secondaryColor]);
 
   function saveOfflineDraft(draft: PillTemplateDraft, svg: string) {
-    if (typeof window === "undefined") return;
-    const existingRaw = window.localStorage.getItem(OFFLINE_PILL_DRAFTS_KEY);
-    let existing: Array<PillTemplateDraft & { svgMarkup: string; savedAt: string }> = [];
-    if (existingRaw) {
-      try {
-        existing = JSON.parse(existingRaw) as Array<PillTemplateDraft & { svgMarkup: string; savedAt: string }>;
-      } catch {
-        existing = [];
-      }
+    offlineDraftQueue.unshift({ ...draft, svgMarkup: svg, savedAt: new Date().toISOString() });
+    if (offlineDraftQueue.length > 20) {
+      offlineDraftQueue.splice(20);
     }
-    const next = [{ ...draft, svgMarkup: svg, savedAt: new Date().toISOString() }, ...existing].slice(0, 20);
-    window.localStorage.setItem(OFFLINE_PILL_DRAFTS_KEY, JSON.stringify(next));
   }
 
   async function handleSave() {
@@ -106,7 +98,7 @@ export function PillEditor({ initialValue, highContrast = false, onSave }: PillE
       const isOnline = typeof navigator === "undefined" ? true : navigator.onLine;
       if (!onSave || !isOnline) {
         saveOfflineDraft(draft, svgMarkup);
-        setSaveMessage("Saved locally. It will be available offline until the server is reachable.");
+        setSaveMessage("Saved in offline queue for this session. Sync to server when connectivity returns.");
         return;
       }
 
