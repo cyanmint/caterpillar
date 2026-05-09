@@ -2,7 +2,8 @@ name: Deploy frontend to GitHub Pages
 
 on:
   push:
-    branches: [work]
+    branches:
+      - 'codex/**'
   workflow_dispatch:
 
 permissions:
