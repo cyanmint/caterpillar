@@ -4,11 +4,13 @@ import { moodConfig } from "./CaterpillarSvg";
 import { usePetStore } from "../../stores/usePetStore";
 
 const HEAD_SIZE = 140;
-const SPEED = 2.0; // px per RAF frame (~120px/s @60fps)
+const SPEED = 1.2; // px per RAF frame (~72px/s @60fps)
 const RANDOM_TURN_CHANCE = 0.003;
 const SAFE_MARGIN = 90; // keep head center away from hard screen edges
 const CORNER_BUFFER = 120; // steer away before entering corner traps
 const SEGMENT_GAP = 26; // distance between snake segments
+// CaterpillarSvg viewBox is 260 wide and tail segment radius is 11 (diameter 22).
+const ORIGINAL_TAIL_SEGMENT_SIZE = (HEAD_SIZE * 22) / 260;
 
 // right, down, left, up
 const DIRS = [
@@ -92,11 +94,6 @@ export function DraggableCaterpillar() {
   const mood = usePetStore((s) => s.stats.mood);
   const reactionEmoji = usePetStore((s) => s.reactionEmoji);
   const segmentCount = usePetStore((s) => s.segments);
-  const initialSegmentCountRef = useRef<number | null>(null);
-
-  if (initialSegmentCountRef.current === null) {
-    initialSegmentCountRef.current = segmentCount;
-  }
 
   const dragHandleRef = useRef<HTMLDivElement>(null);
 
@@ -113,15 +110,10 @@ export function DraggableCaterpillar() {
     body: [],
   });
 
-  const bodySizes = useMemo(() => {
-    const baseCount = Math.max(1, initialSegmentCountRef.current ?? 1);
-    const baseSizes = Array.from({ length: baseCount }, (_, i) => Math.max(26, 56 - i * 2));
-    const tailSize = baseSizes[baseSizes.length - 1] ?? 26;
-
-    return Array.from({ length: segmentCount }, (_, i) =>
-      i < baseCount ? baseSizes[i] : tailSize,
-    );
-  }, [segmentCount]);
+  const bodySizes = useMemo(
+    () => Array.from({ length: segmentCount }, () => ORIGINAL_TAIL_SEGMENT_SIZE),
+    [segmentCount],
+  );
 
   useEffect(() => {
     const start: Vec = {
