@@ -10,6 +10,21 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
+CREATE TABLE IF NOT EXISTS pill_templates (
+  id TEXT PRIMARY KEY,
+  owner_user_id TEXT NOT NULL,
+  drug_name TEXT NOT NULL,
+  shape TEXT NOT NULL,
+  primary_color TEXT NOT NULL,
+  secondary_color TEXT,
+  divider TEXT NOT NULL DEFAULT 'none',
+  svg_r2_key TEXT NOT NULL UNIQUE,
+  is_public INTEGER NOT NULL DEFAULT 1 CHECK (is_public IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS medications (
   id TEXT PRIMARY KEY,
   owner_user_id TEXT NOT NULL,
@@ -36,21 +51,6 @@ CREATE TABLE IF NOT EXISTS dose_logs (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS pill_templates (
-  id TEXT PRIMARY KEY,
-  owner_user_id TEXT NOT NULL,
-  drug_name TEXT NOT NULL,
-  shape TEXT NOT NULL,
-  primary_color TEXT NOT NULL,
-  secondary_color TEXT,
-  divider TEXT NOT NULL DEFAULT 'none',
-  svg_r2_key TEXT NOT NULL UNIQUE,
-  is_public INTEGER NOT NULL DEFAULT 1 CHECK (is_public IN (0, 1)),
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_pill_templates_drug_name ON pill_templates(drug_name);

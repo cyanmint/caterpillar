@@ -22,6 +22,7 @@ const CORS_HEADERS = {
   "access-control-allow-methods": "POST,OPTIONS",
   "access-control-allow-headers": "content-type,authorization",
 };
+const MAX_SVG_SIZE_BYTES = 128_000;
 
 function jsonResponse(status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {
@@ -57,7 +58,7 @@ function parseSubmission(input: unknown): PillTemplateSubmission | null {
   if (!["none", "half", "quarter"].includes(parsed.divider)) return null;
   if (!isValidHexColor(parsed.primaryColor)) return null;
   if (parsed.secondaryColor && !isValidHexColor(parsed.secondaryColor)) return null;
-  if (parsed.svgMarkup.length > 128_000) return null;
+  if (parsed.svgMarkup.length > MAX_SVG_SIZE_BYTES) return null;
   if (!parsed.svgMarkup.startsWith("<svg")) return null;
 
   return parsed;
@@ -110,7 +111,7 @@ export default {
         submission.shape,
         submission.primaryColor,
         submission.secondaryColor ?? null,
-        submission.divider ?? "none",
+        submission.divider,
         r2Key,
         submission.isPublic ? 1 : 0,
         now,
@@ -122,7 +123,7 @@ export default {
       id: templateId,
       drugName: submission.drugName,
       shape: submission.shape,
-      divider: submission.divider ?? "none",
+      divider: submission.divider,
       primaryColor: submission.primaryColor,
       secondaryColor: submission.secondaryColor ?? null,
       svgR2Key: r2Key,
@@ -130,4 +131,3 @@ export default {
     });
   },
 } satisfies ExportedHandler<Env>;
-
