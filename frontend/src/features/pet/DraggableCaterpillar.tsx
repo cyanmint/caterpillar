@@ -2,56 +2,105 @@ import { useEffect, useRef, useState } from "react";
 import { CaterpillarSvg } from "./CaterpillarSvg";
 import { usePetStore } from "../../stores/usePetStore";
 
-const WIDTH = 80;
-const WALK_SPEED = 0.6; // px per RAF frame (~36px/s at 60fps)
+const SIZE = 80; // bounding box used for wall collision
+const SPEED = 1.5; // px per RAF frame (~90px/s at 60fps)
+// ~0.25% chance per frame to take a random 90-degree turn (~2–3 turns/min)
+const RANDOM_TURN_CHANCE = 0.0025;
+
+// Cardinal directions in order: right, down, left, up (clockwise)
+const DIRS = [
+  { dx: 1,  dy: 0  }, // 0 right
+  { dx: 0,  dy: 1  }, // 1 down
+  { dx: -1, dy: 0  }, // 2 left
+  { dx: 0,  dy: -1 }, // 3 up
+] as const;
+
+/** CSS transform that rotates the SVG to face the given direction index. */
+function dirTransform(idx: number): string {
+  // SVG faces right by default; rotate clockwise to face other directions
+  return `rotate(${idx * 90}deg)`;
+}
 
 export function DraggableCaterpillar() {
   const mood = usePetStore((s) => s.stats.mood);
   const reactionEmoji = usePetStore((s) => s.reactionEmoji);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  // Use refs for hot-path values to avoid stale closures inside RAF
-  const xRef = useRef(32);
-  const yRef = useRef<number | null>(null); // null until mounted (read innerHeight then)
-  const dirRef = useRef(1); // 1 = walking right, -1 = walking left
+  const xRef = useRef(40);
+  const yRef = useRef<number | null>(null); // initialised after mount
+  const dirIdxRef = useRef(0); // start moving right
   const isDraggingRef = useRef(false);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
 
-  // `dir` state is only used for the SVG flip — updated at bounce points
-  const [dir, setDir] = useState(1);
+  // Only triggers a re-render when direction changes (not every frame)
+  const [svgTransform, setSvgTransform] = useState(dirTransform(0));
 
-  // Initialise y after mount (safe for SSR / unit tests)
+  function applyDir(idx: number) {
+    dirIdxRef.current = idx;
+    setSvgTransform(dirTransform(idx));
+  }
+
+  // Place near the bottom of the viewport on first mount
   useEffect(() => {
     if (yRef.current === null) {
-      // Place near bottom of viewport, above the 64px tab bar
-      yRef.current = window.innerHeight - 100;
+      yRef.current = window.innerHeight - 120;
       if (containerRef.current) {
         containerRef.current.style.top = `${yRef.current}px`;
       }
     }
   }, []);
 
-  // RAF walking loop — mutates style directly for smooth 60fps without re-renders
+  // RAF movement loop — writes style directly for smooth 60fps
   useEffect(() => {
     let rafId: number;
 
     function tick() {
       if (!isDraggingRef.current && containerRef.current) {
-        const maxX = window.innerWidth - WIDTH;
-        xRef.current += WALK_SPEED * dirRef.current;
+        const { dx, dy } = DIRS[dirIdxRef.current];
+        const maxX = window.innerWidth - SIZE;
+        const maxY = window.innerHeight - SIZE;
 
-        if (xRef.current >= maxX) {
-          xRef.current = maxX;
-          dirRef.current = -1;
-          setDir(-1);
-        } else if (xRef.current <= 0) {
-          xRef.current = 0;
-          dirRef.current = 1;
-          setDir(1);
+        let nx = xRef.current + dx * SPEED;
+        let ny = (yRef.current ?? 0) + dy * SPEED;
+
+        let hitX = false;
+        let hitY = false;
+
+        if (nx <= 0)    { nx = 0;    hitX = true; }
+        else if (nx >= maxX) { nx = maxX; hitX = true; }
+        if (ny <= 0)    { ny = 0;    hitY = true; }
+        else if (ny >= maxY) { ny = maxY; hitY = true; }
+
+        if (hitX || hitY) {
+          // Snake-style: turn 90° into a direction that moves away from the wall(s)
+          let newIdx: number;
+          if (hitX && hitY) {
+            // Corner: pick the axis that moves away from the nearest wall
+            const goRight = nx <= 0;   // hit left wall → go right
+            const goDown  = ny <= 0;   // hit top wall  → go down
+            newIdx = Math.random() < 0.5
+              ? (goRight ? 0 : 2)      // horizontal option
+              : (goDown  ? 1 : 3);     // vertical option
+          } else if (hitX) {
+            // Hit left or right wall → turn up or down
+            newIdx = Math.random() < 0.5 ? 1 : 3;
+          } else {
+            // Hit top or bottom wall → turn left or right
+            newIdx = Math.random() < 0.5 ? 0 : 2;
+          }
+          applyDir(newIdx);
+        } else if (Math.random() < RANDOM_TURN_CHANCE) {
+          // Occasional random snake-style 90-degree turn while wandering
+          const turn = Math.random() < 0.5 ? 1 : 3; // +90° or −90° relative
+          applyDir((dirIdxRef.current + turn) % 4);
         }
 
-        containerRef.current.style.left = `${xRef.current}px`;
+        xRef.current = nx;
+        yRef.current = ny;
+        containerRef.current.style.left = `${nx}px`;
+        containerRef.current.style.top  = `${ny}px`;
       }
+
       rafId = requestAnimationFrame(tick);
     }
 
@@ -60,7 +109,6 @@ export function DraggableCaterpillar() {
   }, []);
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    // Capture so pointermove/up fire even outside the element
     e.currentTarget.setPointerCapture(e.pointerId);
     isDraggingRef.current = true;
     dragOffsetRef.current = {
@@ -74,7 +122,7 @@ export function DraggableCaterpillar() {
     xRef.current = e.clientX - dragOffsetRef.current.x;
     yRef.current = e.clientY - dragOffsetRef.current.y;
     containerRef.current.style.left = `${xRef.current}px`;
-    containerRef.current.style.top = `${yRef.current}px`;
+    containerRef.current.style.top  = `${yRef.current}px`;
   }
 
   function onPointerUp() {
@@ -97,19 +145,23 @@ export function DraggableCaterpillar() {
         style={{
           position: "fixed",
           left: xRef.current,
-          top: yRef.current ?? window.innerHeight - 100,
-          width: WIDTH,
+          top: yRef.current ?? window.innerHeight - 120,
+          width: SIZE,
+          height: SIZE,
           zIndex: 40,
           touchAction: "none",
           userSelect: "none",
           cursor: "grab",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        {/* Wrap SVG in a div for directional flip without affecting reaction emoji */}
-        <div style={{ transform: dir === -1 ? "scaleX(-1)" : undefined }}>
+        {/* Rotate SVG to face the direction of travel */}
+        <div style={{ transform: svgTransform, width: "100%", transformOrigin: "center" }}>
           <CaterpillarSvg mood={mood} className="w-full h-auto drop-shadow" />
         </div>
 
