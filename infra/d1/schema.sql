@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS pet_stats (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS idx_pet_stats_leaderboard ON pet_stats(consistency_streak DESC, best_streak DESC, updated_at ASC);
 
 CREATE VIEW IF NOT EXISTS leaderboard_consistency AS
 SELECT

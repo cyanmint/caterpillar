@@ -18,6 +18,7 @@ jobs:
   deploy-frontend:
     name: Deploy frontend to GitHub Pages
     runs-on: ubuntu-latest
+    if: ${{ hashFiles('frontend/package.json') != '' }}
     defaults:
       run:
         working-directory: frontend
@@ -51,6 +52,7 @@ jobs:
   deploy-backend:
     name: Deploy backend to Cloudflare Workers
     runs-on: ubuntu-latest
+    if: ${{ hashFiles('backend/package.json') != '' }}
     defaults:
       run:
         working-directory: backend
@@ -71,4 +73,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: backend
           command: deploy

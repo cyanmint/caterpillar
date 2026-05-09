@@ -141,13 +141,13 @@ export function PillEditor({ initialValue, highContrast = false, onSave }: PillE
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block text-sm font-medium">
+        <label className="block text-sm font-medium" htmlFor="pill-primary-color">
           Primary color
-          <input className="mt-1 block h-10 w-full rounded-md border border-slate-300 p-1" type="color" value={primaryColor} onChange={(event) => setPrimaryColor(event.target.value)} />
+          <input id="pill-primary-color" className="mt-1 block h-10 w-full rounded-md border border-slate-300 p-1" type="color" value={primaryColor} onChange={(event) => setPrimaryColor(event.target.value)} />
         </label>
-        <label className="block text-sm font-medium">
+        <label className="block text-sm font-medium" htmlFor="pill-secondary-color">
           Secondary color
-          <input className="mt-1 block h-10 w-full rounded-md border border-slate-300 p-1" type="color" value={secondaryColor} onChange={(event) => setSecondaryColor(event.target.value)} />
+          <input id="pill-secondary-color" className="mt-1 block h-10 w-full rounded-md border border-slate-300 p-1" type="color" value={secondaryColor} onChange={(event) => setSecondaryColor(event.target.value)} />
         </label>
       </div>
 

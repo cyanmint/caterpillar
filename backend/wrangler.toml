@@ -1,0 +1,12 @@
+name = "caterpillar-backend"
+main = "src/index.ts"
+compatibility_date = "2026-05-09"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "caterpillar"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "PILL_TEMPLATES_BUCKET"
+bucket_name = "caterpillar-pill-templates"
