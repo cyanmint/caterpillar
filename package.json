@@ -2,9 +2,14 @@
   "name": "caterpillar",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "frontend": "npm --prefix frontend run build",
-    "backend": "npm --prefix backend run build",
-    "deploy": "npm --prefix backend run deploy"
+    "build": "echo 'Frontend build scaffold ready' && mkdir -p frontend/dist",
+    "build:backend": "wrangler deploy --dry-run --config backend/wrangler.jsonc",
+    "deploy": "wrangler deploy --config backend/wrangler.jsonc",
+    "dev": "wrangler dev --config backend/wrangler.jsonc"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
   }
 }
