@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PillEditor } from "./features/pills/PillEditor";
+import { MedicationsView } from "./features/pills/MedicationsView";
 import { ScheduleView } from "./features/schedule/ScheduleView";
 import { PetView } from "./features/pet/PetView";
 import { InventoryView } from "./features/inventory/InventoryView";
@@ -32,11 +32,7 @@ export default function App() {
       {/* Main content area — scrollable, leaves room for tab bar */}
       <div className="flex-1 overflow-y-auto pb-20">
         {activeTab === "schedule" && <ScheduleView />}
-        {activeTab === "pills" && (
-          <div className="mx-auto max-w-xl p-4">
-            <PillEditor />
-          </div>
-        )}
+        {activeTab === "pills" && <MedicationsView />}
         {activeTab === "inventory" && <InventoryView />}
         {activeTab === "pet" && <PetView />}
       </div>

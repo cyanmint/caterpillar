@@ -15,7 +15,10 @@ export interface PillTemplateDraft {
 }
 
 interface PillEditorProps {
-  initialValue?: Partial<PillTemplateDraft>;
+  /** When provided, the editor operates in "edit existing" mode. */
+  editingMed?: Medication;
+  /** Called after a successful save or when the user cancels. */
+  onDone?: () => void;
   highContrast?: boolean;
 }
 
@@ -136,19 +139,22 @@ export function PillSvgPreview({
   );
 }
 
-export function PillEditor({ initialValue, highContrast = false }: PillEditorProps) {
+export function PillEditor({ editingMed, onDone, highContrast = false }: PillEditorProps) {
   const addMedication = useMedStore((s) => s.addMedication);
+  const updateMedication = useMedStore((s) => s.updateMedication);
 
-  const [drugName, setDrugName] = useState(initialValue?.drugName ?? "");
-  const [dosageLabel, setDosageLabel] = useState("");
-  const [pillsPerBox, setPillsPerBox] = useState<string>("");
-  const [shape, setShape] = useState<PillShape>(initialValue?.shape ?? "oblong");
-  const [primaryColor, setPrimaryColor] = useState(initialValue?.primaryColor ?? "#FFFFFF");
-  const [secondaryColor, setSecondaryColor] = useState(initialValue?.secondaryColor ?? "#2E86DE");
-  const [divider, setDivider] = useState<PillDivider>(initialValue?.divider ?? "none");
-  const [customPath, setCustomPath] = useState(initialValue?.customPath ?? "");
-  const [scheduleTimes, setScheduleTimes] = useState<string[]>(["08:00"]);
-  const [imprintText, setImprintText] = useState("");
+  const isEditing = !!editingMed;
+
+  const [drugName, setDrugName] = useState(editingMed?.drugName ?? "");
+  const [dosageLabel, setDosageLabel] = useState(editingMed?.dosageLabel ?? "");
+  const [pillsPerBox, setPillsPerBox] = useState<string>(editingMed?.pillsPerBox?.toString() ?? "");
+  const [shape, setShape] = useState<PillShape>(editingMed?.shape ?? "oblong");
+  const [primaryColor, setPrimaryColor] = useState(editingMed?.primaryColor ?? "#FFFFFF");
+  const [secondaryColor, setSecondaryColor] = useState(editingMed?.secondaryColor ?? "#2E86DE");
+  const [divider, setDivider] = useState<PillDivider>(editingMed?.divider ?? "none");
+  const [customPath, setCustomPath] = useState("");
+  const [scheduleTimes, setScheduleTimes] = useState<string[]>(editingMed?.scheduleTimes ?? ["08:00"]);
+  const [imprintText, setImprintText] = useState(editingMed?.imprintText ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<string>("");
 
@@ -198,32 +204,53 @@ export function PillEditor({ initialValue, highContrast = false }: PillEditorPro
     setIsSaving(true);
     try {
       const now = new Date().toISOString();
-      const med: Medication = {
-        id: crypto.randomUUID(),
-        drugName: drugName.trim(),
-        dosageLabel: dosageLabel.trim() || undefined,
-        pillsPerBox: pillsPerBox ? parseInt(pillsPerBox, 10) : undefined,
-        remainingPills: pillsPerBox ? parseInt(pillsPerBox, 10) : 0,
-        imprintText: imprintText.trim() || undefined,
-        shape,
-        primaryColor,
-        secondaryColor,
-        divider,
-        svgMarkup,
-        scheduleTimes: scheduleTimes.filter(Boolean),
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await addMedication(med);
-      showToast("✅ Medication saved!");
-      // Reset form
-      setDrugName("");
-      setDosageLabel("");
-      setPillsPerBox("");
-      setScheduleTimes(["08:00"]);
-      setCustomPath("");
-      setImprintText("");
+      if (isEditing && editingMed) {
+        const parsedBox = pillsPerBox ? parseInt(pillsPerBox, 10) : undefined;
+        await updateMedication(editingMed.id, {
+          drugName: drugName.trim(),
+          dosageLabel: dosageLabel.trim() || undefined,
+          pillsPerBox: parsedBox,
+          imprintText: imprintText.trim() || undefined,
+          shape,
+          primaryColor,
+          secondaryColor,
+          divider,
+          svgMarkup,
+          scheduleTimes: scheduleTimes.filter(Boolean),
+          updatedAt: now,
+        });
+        showToast("✅ Medication updated!");
+        onDone?.();
+      } else {
+        const parsedBox = pillsPerBox ? parseInt(pillsPerBox, 10) : undefined;
+        const med: Medication = {
+          id: crypto.randomUUID(),
+          drugName: drugName.trim(),
+          dosageLabel: dosageLabel.trim() || undefined,
+          pillsPerBox: parsedBox,
+          remainingPills: parsedBox ?? 0,
+          imprintText: imprintText.trim() || undefined,
+          shape,
+          primaryColor,
+          secondaryColor,
+          divider,
+          svgMarkup,
+          scheduleTimes: scheduleTimes.filter(Boolean),
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await addMedication(med);
+        showToast("✅ Medication saved!");
+        // Reset form
+        setDrugName("");
+        setDosageLabel("");
+        setPillsPerBox("");
+        setScheduleTimes(["08:00"]);
+        setCustomPath("");
+        setImprintText("");
+        onDone?.();
+      }
     } catch {
       showToast("❌ Failed to save. Please try again.");
     } finally {
@@ -234,8 +261,21 @@ export function PillEditor({ initialValue, highContrast = false }: PillEditorPro
   return (
     <section className="space-y-4 rounded-xl border border-slate-300 bg-white p-4 text-slate-900 shadow-sm">
       <header className="space-y-1">
-        <h2 className="text-lg font-semibold">Pill Editor</h2>
-        <p className="text-sm text-slate-600">Design your medication and save it to your schedule.</p>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{isEditing ? "Edit Medication" : "Add Medication"}</h2>
+          {onDone && (
+            <button
+              type="button"
+              onClick={onDone}
+              className="rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+        <p className="text-sm text-slate-600">
+          {isEditing ? "Update the pill design and schedule." : "Design your medication and save it to your schedule."}
+        </p>
         {toast && (
           <p className="rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-800" aria-live="polite">
             {toast}
@@ -413,7 +453,7 @@ export function PillEditor({ initialValue, highContrast = false }: PillEditorPro
         disabled={isSaving || !drugName.trim()}
         className="w-full rounded-md bg-slate-900 p-3 text-white disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isSaving ? "Saving..." : "Save Pill Template"}
+        {isSaving ? "Saving..." : isEditing ? "Update Medication" : "Save Medication"}
       </button>
     </section>
   );
