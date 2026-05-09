@@ -14,8 +14,8 @@ const SVG_TAIL_CENTER_X = 215;
 const ORIGINAL_TAIL_SEGMENT_SIZE = (HEAD_SIZE * 22) / SVG_VIEWBOX_WIDTH; // tail diameter in px
 const SEGMENT_START_OFFSET =
   (HEAD_SIZE * (SVG_TAIL_CENTER_X - SVG_CENTER_X)) / SVG_VIEWBOX_WIDTH +
-  ORIGINAL_TAIL_SEGMENT_SIZE * 0.9; // attach right after SVG tail
-const SEGMENT_GAP = ORIGINAL_TAIL_SEGMENT_SIZE * 0.82; // small overlap for connected body
+  ORIGINAL_TAIL_SEGMENT_SIZE * 0.9; // add ~90% of one segment so first spawned circle touches the SVG tail
+const SEGMENT_GAP = ORIGINAL_TAIL_SEGMENT_SIZE * 0.82; // keep ~18% overlap so circles look like a connected body
 
 // right, down, left, up
 const DIRS = [
