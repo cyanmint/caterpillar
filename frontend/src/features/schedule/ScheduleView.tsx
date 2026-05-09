@@ -50,6 +50,7 @@ export function ScheduleView() {
   const loadAll = useMedStore((s) => s.loadAll);
   const recalculate = usePetStore((s) => s.recalculate);
   const triggerReaction = usePetStore((s) => s.triggerReaction);
+  const addSegment = usePetStore((s) => s.addSegment);
 
   const today = todayStr();
   const activeMeds = medications.filter((m) => m.isActive);
@@ -111,6 +112,7 @@ export function ScheduleView() {
       await loadAll();
       setTakenSlot(null);
       triggerReaction("⭐");
+      addSegment();
     } finally {
       setBusySlot(null);
     }

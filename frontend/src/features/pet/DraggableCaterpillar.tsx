@@ -1,144 +1,258 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CaterpillarSvg } from "./CaterpillarSvg";
+import { moodConfig } from "./CaterpillarSvg";
 import { usePetStore } from "../../stores/usePetStore";
 
-const SIZE = 140; // bounding box used for wall collision
-const SPEED = 2.0; // px per RAF frame (~120px/s at 60fps)
-// ~0.3% chance per frame to take a random 90-degree turn (~2–3 turns/min)
+const HEAD_SIZE = 140;
+const SPEED = 2.0; // px per RAF frame (~120px/s @60fps)
 const RANDOM_TURN_CHANCE = 0.003;
+const SAFE_MARGIN = 90; // keep head center away from hard screen edges
+const CORNER_BUFFER = 120; // steer away before entering corner traps
+const SEGMENT_GAP = 26; // distance between snake segments
 
-// Cardinal directions in order: right, down, left, up (clockwise)
+// right, down, left, up
 const DIRS = [
-  { dx: 1,  dy: 0  }, // 0 right
-  { dx: 0,  dy: 1  }, // 1 down
-  { dx: -1, dy: 0  }, // 2 left
-  { dx: 0,  dy: -1 }, // 3 up
+  { dx: 1, dy: 0 },
+  { dx: 0, dy: 1 },
+  { dx: -1, dy: 0 },
+  { dx: 0, dy: -1 },
 ] as const;
 
-/** CSS transform that rotates the SVG to face the given direction index.
- *  The CaterpillarSvg has its HEAD on the LEFT of the viewBox, so we need
- *  an extra 180° so the head leads instead of trails the movement direction.
- *  Base offsets:
- *    idx 0 (right) → 180°   idx 1 (down) → 270°
- *    idx 2 (left)  → 360°   idx 3 (up)  →  90°
- */
-function dirBaseAngle(idx: number): number {
-  return 180 + idx * 90;
+type Vec = { x: number; y: number };
+
+type RenderState = {
+  head: Vec;
+  dirIdx: number;
+  body: Vec[];
+};
+
+function angleForDir(dirIdx: number): number {
+  // CaterpillarSvg head points left at baseline, so add 180° to make head face travel direction
+  return 180 + dirIdx * 90;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function dist(a: Vec, b: Vec): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function pointAlongHistory(history: Vec[], distanceFromHead: number): Vec {
+  if (history.length === 0) return { x: 0, y: 0 };
+  if (distanceFromHead <= 0) return history[0];
+
+  let remaining = distanceFromHead;
+  for (let i = 1; i < history.length; i++) {
+    const a = history[i - 1];
+    const b = history[i];
+    const d = dist(a, b);
+    if (d >= remaining) {
+      const t = remaining / d;
+      return {
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+      };
+    }
+    remaining -= d;
+  }
+
+  return history[history.length - 1];
+}
+
+function chooseWallTurn(
+  dirIdx: number,
+  x: number,
+  y: number,
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number,
+): number {
+  const nearTop = y <= minY + CORNER_BUFFER;
+  const nearBottom = y >= maxY - CORNER_BUFFER;
+  const nearLeft = x <= minX + CORNER_BUFFER;
+  const nearRight = x >= maxX - CORNER_BUFFER;
+
+  // hit horizontal walls while moving horizontally => turn vertically (corner-safe choice)
+  if (dirIdx === 0 || dirIdx === 2) {
+    if (nearTop) return 1; // down
+    if (nearBottom) return 3; // up
+    return y < (minY + maxY) / 2 ? 1 : 3;
+  }
+
+  // hit vertical walls while moving vertically => turn horizontally (corner-safe choice)
+  if (nearLeft) return 0; // right
+  if (nearRight) return 2; // left
+  return x < (minX + maxX) / 2 ? 0 : 2;
 }
 
 export function DraggableCaterpillar() {
   const mood = usePetStore((s) => s.stats.mood);
   const reactionEmoji = usePetStore((s) => s.reactionEmoji);
+  const segmentCount = usePetStore((s) => s.segments);
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const xRef = useRef(40);
-  const yRef = useRef<number | null>(null); // initialised after mount
-  const dirIdxRef = useRef(0); // start moving right
-  const rotationRef = useRef(dirBaseAngle(0)); // accumulated degrees — avoids CSS wrap-around
+  const dragHandleRef = useRef<HTMLDivElement>(null);
+
+  const headRef = useRef<Vec>({ x: SAFE_MARGIN + 40, y: SAFE_MARGIN + 40 });
+  const dirIdxRef = useRef(0);
+  const queuedTurnRef = useRef<number | null>(null);
   const isDraggingRef = useRef(false);
-  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const dragOffsetRef = useRef<Vec>({ x: 0, y: 0 });
+  const historyRef = useRef<Vec[]>([]);
 
-  // Only triggers a re-render when direction changes (not every frame)
-  const [svgTransform, setSvgTransform] = useState(`rotate(${dirBaseAngle(0)}deg)`);
+  const [render, setRender] = useState<RenderState>({
+    head: headRef.current,
+    dirIdx: dirIdxRef.current,
+    body: [],
+  });
 
-  function applyDir(newIdx: number) {
-    const oldIdx = dirIdxRef.current;
-    // Compute the signed delta (-90 or +90) so the CSS transition always takes the short arc
-    const steps = ((newIdx - oldIdx) + 4) % 4; // 1 or 3
-    const delta = steps === 3 ? -90 : steps * 90; // −90 or +90 (or +180 on rare 180° flip)
-    rotationRef.current += delta;
-    dirIdxRef.current = newIdx;
-    setSvgTransform(`rotate(${rotationRef.current}deg)`);
-  }
+  const bodySizes = useMemo(
+    () => Array.from({ length: segmentCount }, (_, i) => Math.max(26, 56 - i * 2)),
+    [segmentCount],
+  );
 
-  // Place near the bottom of the viewport on first mount
   useEffect(() => {
-    if (yRef.current === null) {
-      yRef.current = window.innerHeight - 120;
-      if (containerRef.current) {
-        containerRef.current.style.top = `${yRef.current}px`;
-      }
+    const start: Vec = {
+      x: Math.max(SAFE_MARGIN + 40, window.innerWidth * 0.25),
+      y: Math.max(SAFE_MARGIN + 40, window.innerHeight * 0.65),
+    };
+
+    headRef.current = start;
+    historyRef.current = Array.from({ length: Math.max(120, segmentCount * 20) }, () => start);
+    setRender({
+      head: start,
+      dirIdx: dirIdxRef.current,
+      body: Array.from({ length: segmentCount }, (_, i) => pointAlongHistory(historyRef.current, (i + 1) * SEGMENT_GAP)),
+    });
+  }, [segmentCount]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const key = e.key.toLowerCase();
+      let next: number | null = null;
+      if (key === "arrowright" || key === "d") next = 0;
+      else if (key === "arrowdown" || key === "s") next = 1;
+      else if (key === "arrowleft" || key === "a") next = 2;
+      else if (key === "arrowup" || key === "w") next = 3;
+
+      if (next === null) return;
+      e.preventDefault();
+
+      // Snake rule: no instant reverse 180°
+      if ((next + 2) % 4 === dirIdxRef.current) return;
+      queuedTurnRef.current = next;
     }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // RAF movement loop — writes style directly for smooth 60fps
   useEffect(() => {
-    let rafId: number;
+    let rafId = 0;
 
     function tick() {
-      if (!isDraggingRef.current && containerRef.current) {
-        const { dx, dy } = DIRS[dirIdxRef.current];
-        const maxX = window.innerWidth - SIZE;
-        const maxY = window.innerHeight - SIZE;
+      const minX = SAFE_MARGIN;
+      const minY = SAFE_MARGIN;
+      const maxX = window.innerWidth - SAFE_MARGIN;
+      const maxY = window.innerHeight - SAFE_MARGIN;
 
-        let nx = xRef.current + dx * SPEED;
-        let ny = (yRef.current ?? 0) + dy * SPEED;
-
-        let hitX = false;
-        let hitY = false;
-
-        if (nx <= 0)    { nx = 0;    hitX = true; }
-        else if (nx >= maxX) { nx = maxX; hitX = true; }
-        if (ny <= 0)    { ny = 0;    hitY = true; }
-        else if (ny >= maxY) { ny = maxY; hitY = true; }
-
-        if (hitX || hitY) {
-          // Snake-style: turn 90° into a direction that moves away from the wall(s)
-          let newIdx: number;
-          if (hitX && hitY) {
-            // Corner: pick the axis that moves away from the nearest wall
-            const goRight = nx <= 0;   // hit left wall → go right
-            const goDown  = ny <= 0;   // hit top wall  → go down
-            newIdx = Math.random() < 0.5
-              ? (goRight ? 0 : 2)      // horizontal option
-              : (goDown  ? 1 : 3);     // vertical option
-          } else if (hitX) {
-            // Hit left or right wall → turn up or down
-            newIdx = Math.random() < 0.5 ? 1 : 3;
-          } else {
-            // Hit top or bottom wall → turn left or right
-            newIdx = Math.random() < 0.5 ? 0 : 2;
-          }
-          applyDir(newIdx);
+      if (!isDraggingRef.current) {
+        // manual turn has priority
+        if (queuedTurnRef.current !== null) {
+          dirIdxRef.current = queuedTurnRef.current;
+          queuedTurnRef.current = null;
         } else if (Math.random() < RANDOM_TURN_CHANCE) {
-          // Occasional random snake-style 90-degree turn while wandering
-          const turn = Math.random() < 0.5 ? 1 : 3; // +90° or −90° relative
-          applyDir((dirIdxRef.current + turn) % 4);
+          // occasional auto-turn, still no 180° reversal
+          const delta = Math.random() < 0.5 ? 1 : 3;
+          dirIdxRef.current = (dirIdxRef.current + delta) % 4;
         }
 
-        xRef.current = nx;
-        yRef.current = ny;
-        containerRef.current.style.left = `${nx}px`;
-        containerRef.current.style.top  = `${ny}px`;
+        const { dx, dy } = DIRS[dirIdxRef.current];
+
+        let nx = headRef.current.x + dx * SPEED;
+        let ny = headRef.current.y + dy * SPEED;
+
+        const hitX = nx <= minX || nx >= maxX;
+        const hitY = ny <= minY || ny >= maxY;
+
+        if (hitX || hitY) {
+          nx = clamp(nx, minX, maxX);
+          ny = clamp(ny, minY, maxY);
+
+          // choose a corner-safe perpendicular turn
+          dirIdxRef.current = chooseWallTurn(dirIdxRef.current, nx, ny, minX, maxX, minY, maxY);
+        }
+
+        headRef.current = { x: nx, y: ny };
       }
+
+      // prepend head position to movement history
+      historyRef.current.unshift(headRef.current);
+
+      const maxHistoryDistance = (segmentCount + 4) * SEGMENT_GAP;
+      let accumulated = 0;
+      let trimIndex = historyRef.current.length;
+      for (let i = 1; i < historyRef.current.length; i++) {
+        accumulated += dist(historyRef.current[i - 1], historyRef.current[i]);
+        if (accumulated > maxHistoryDistance) {
+          trimIndex = i + 1;
+          break;
+        }
+      }
+      if (trimIndex < historyRef.current.length) {
+        historyRef.current.length = trimIndex;
+      }
+
+      const body = Array.from({ length: segmentCount }, (_, i) =>
+        pointAlongHistory(historyRef.current, (i + 1) * SEGMENT_GAP),
+      );
+
+      setRender({
+        head: headRef.current,
+        dirIdx: dirIdxRef.current,
+        body,
+      });
 
       rafId = requestAnimationFrame(tick);
     }
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, []);
+  }, [segmentCount]);
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     e.currentTarget.setPointerCapture(e.pointerId);
     isDraggingRef.current = true;
     dragOffsetRef.current = {
-      x: e.clientX - xRef.current,
-      y: e.clientY - (yRef.current ?? 0),
+      x: e.clientX - headRef.current.x,
+      y: e.clientY - headRef.current.y,
     };
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!isDraggingRef.current || !containerRef.current) return;
-    xRef.current = e.clientX - dragOffsetRef.current.x;
-    yRef.current = e.clientY - dragOffsetRef.current.y;
-    containerRef.current.style.left = `${xRef.current}px`;
-    containerRef.current.style.top  = `${yRef.current}px`;
+    if (!isDraggingRef.current) return;
+
+    const minX = SAFE_MARGIN;
+    const minY = SAFE_MARGIN;
+    const maxX = window.innerWidth - SAFE_MARGIN;
+    const maxY = window.innerHeight - SAFE_MARGIN;
+
+    headRef.current = {
+      x: clamp(e.clientX - dragOffsetRef.current.x, minX, maxX),
+      y: clamp(e.clientY - dragOffsetRef.current.y, minY, maxY),
+    };
+
+    // dragging writes path history too so body follows the drag path naturally
+    historyRef.current.unshift(headRef.current);
   }
 
   function onPointerUp() {
     isDraggingRef.current = false;
   }
+
+  const bodyColor = moodConfig[mood].bodyColor;
 
   return (
     <>
@@ -152,38 +266,80 @@ export function DraggableCaterpillar() {
       `}</style>
 
       <div
-        ref={containerRef}
         style={{
           position: "fixed",
-          left: xRef.current,
-          top: yRef.current ?? window.innerHeight - 120,
-          width: SIZE,
-          height: SIZE,
+          inset: 0,
           zIndex: 40,
-          touchAction: "none",
+          pointerEvents: "none",
           userSelect: "none",
-          cursor: "grab",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
         }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
       >
-        {/* Rotate SVG to face the direction of travel; transition gives a snake-pivot feel */}
-        <div style={{ transform: svgTransform, width: "100%", transformOrigin: "center", transition: "transform 0.15s ease" }}>
+        {/* Draw tail first, near-head last for snake-like overlap */}
+        {[...render.body].reverse().map((p, revIdx) => {
+          const idx = render.body.length - 1 - revIdx;
+          const size = bodySizes[idx] ?? 28;
+          return (
+            <div
+              key={idx}
+              style={{
+                position: "absolute",
+                left: p.x,
+                top: p.y,
+                width: size,
+                height: size,
+                borderRadius: "9999px",
+                transform: "translate(-50%, -50%)",
+                background: bodyColor,
+                border: "2px solid #15803d",
+                opacity: 0.92,
+              }}
+            />
+          );
+        })}
+
+        <div
+          style={{
+            position: "absolute",
+            left: render.head.x,
+            top: render.head.y,
+            width: HEAD_SIZE,
+            transform: `translate(-50%, -50%) rotate(${angleForDir(render.dirIdx)}deg)`,
+            transformOrigin: "center",
+            transition: "transform 0.12s linear",
+          }}
+        >
           <CaterpillarSvg mood={mood} className="w-full h-auto drop-shadow" />
         </div>
 
         {reactionEmoji && (
           <span
             key={reactionEmoji + String(Date.now())}
-            className="reaction-burst absolute -top-6 left-1/2 -translate-x-1/2 text-2xl pointer-events-none select-none"
+            className="reaction-burst absolute text-2xl pointer-events-none select-none"
+            style={{ left: render.head.x, top: render.head.y - HEAD_SIZE * 0.55, transform: "translateX(-50%)" }}
           >
             {reactionEmoji}
           </span>
         )}
+
+        {/* Invisible drag handle at head */}
+        <div
+          ref={dragHandleRef}
+          style={{
+            position: "absolute",
+            left: render.head.x,
+            top: render.head.y,
+            width: HEAD_SIZE,
+            height: HEAD_SIZE,
+            transform: "translate(-50%, -50%)",
+            pointerEvents: "auto",
+            touchAction: "none",
+            cursor: "grab",
+            background: "transparent",
+          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+        />
       </div>
     </>
   );
