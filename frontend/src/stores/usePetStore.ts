@@ -14,9 +14,11 @@ const DEFAULT_STATS: PetStats = {
 
 interface PetState {
   stats: PetStats;
+  reactionEmoji: string | null;
   loadPet: () => Promise<void>;
   recalculate: (allLogs: DoseLog[], medications: Medication[]) => Promise<void>;
   updatePetName: (name: string) => Promise<void>;
+  triggerReaction: (emoji: string) => void;
 }
 
 function dateStr(d: Date): string {
@@ -31,6 +33,17 @@ function addDays(date: Date, days: number): Date {
 
 export const usePetStore = create<PetState>((set, get) => ({
   stats: DEFAULT_STATS,
+  reactionEmoji: null,
+
+  triggerReaction(emoji) {
+    set({ reactionEmoji: emoji });
+    setTimeout(() => {
+      // Only clear if the same emoji is still showing
+      if (get().reactionEmoji === emoji) {
+        set({ reactionEmoji: null });
+      }
+    }, 2000);
+  },
 
   async loadPet() {
     const existing = await db.pet_stats.get("local");

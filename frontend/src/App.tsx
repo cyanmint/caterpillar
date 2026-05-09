@@ -3,6 +3,7 @@ import { MedicationsView } from "./features/pills/MedicationsView";
 import { ScheduleView } from "./features/schedule/ScheduleView";
 import { PetView } from "./features/pet/PetView";
 import { InventoryView } from "./features/inventory/InventoryView";
+import { DraggableCaterpillar } from "./features/pet/DraggableCaterpillar";
 import { useMedStore } from "./stores/useMedStore";
 import { usePetStore } from "./stores/usePetStore";
 
@@ -29,6 +30,9 @@ export default function App() {
 
   return (
     <div className="min-h-dvh bg-slate-100 flex flex-col">
+      {/* Global walking & draggable caterpillar overlay */}
+      <DraggableCaterpillar />
+
       {/* Main content area — scrollable, leaves room for tab bar */}
       <div className="flex-1 overflow-y-auto pb-20">
         {activeTab === "schedule" && <ScheduleView />}
