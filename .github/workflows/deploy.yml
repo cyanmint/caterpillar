@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: ["main"]
+    branches: ["default", "copilot/**", "codex/**"]
   workflow_dispatch:
 
 permissions:
