@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMedStore } from "../../stores/useMedStore";
 import { usePetStore } from "../../stores/usePetStore";
 import { PillSvgPreview } from "../pills/PillEditor";
@@ -43,7 +43,6 @@ function nextSlotIndex(
 
 export function ScheduleView() {
   const medications = useMedStore((s) => s.medications);
-  const todayLogs = useMedStore((s) => s.todayLogs);
   const logDose = useMedStore((s) => s.logDose);
   const deleteLog = useMedStore((s) => s.deleteLog);
   const consumePill = useMedStore((s) => s.consumePill);
@@ -53,9 +52,11 @@ export function ScheduleView() {
   const addSegment = usePetStore((s) => s.addSegment);
 
   const today = todayStr();
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [selectedLogs, setSelectedLogs] = useState<DoseLog[]>([]);
   const activeMeds = medications.filter((m) => m.isActive);
 
-  const takenCount = todayLogs.filter((l) => l.status === "taken").length;
+  const takenCount = selectedLogs.filter((l) => l.status === "taken").length;
   const totalScheduled = activeMeds.reduce((sum, m) => sum + m.scheduleTimes.length, 0);
 
   // Inline "Taken" form state
@@ -64,6 +65,16 @@ export function ScheduleView() {
   const [takenDate, setTakenDate] = useState(todayStr());
   const [takenAmount, setTakenAmount] = useState<PillAmount>(1);
   const [busySlot, setBusySlot] = useState<string | null>(null);
+
+  async function loadSelectedLogs(date: string) {
+    const logs = await db.dose_logs.where("scheduledFor").startsWith(date).toArray();
+    setSelectedLogs(logs);
+  }
+
+  useEffect(() => {
+    void loadSelectedLogs(selectedDate);
+    setTakenSlot(null);
+  }, [selectedDate]);
 
   interface Slot {
     medicationId: string;
@@ -74,20 +85,20 @@ export function ScheduleView() {
   const slots: Slot[] = activeMeds.flatMap((m) =>
     m.scheduleTimes.map((t) => ({
       medicationId: m.id,
-      scheduledFor: `${today}T${t}:00`,
+      scheduledFor: `${selectedDate}T${t}:00`,
       time: t,
     })),
   );
   slots.sort((a, b) => a.time.localeCompare(b.time));
 
   const slotKeys = slots.map((s) => `${s.medicationId}|${s.scheduledFor}`);
-  const logMap = new Map(todayLogs.map((l) => [l.id, l]));
-  const nextIdx = nextSlotIndex(slots, logMap, slotKeys);
+  const logMap = new Map(selectedLogs.map((l) => [l.id, l]));
+  const nextIdx = selectedDate === today ? nextSlotIndex(slots, logMap, slotKeys) : -1;
 
   function openTakenForm(slotKey: string) {
     setTakenSlot(slotKey);
     setTakenTime(nowHHMM());
-    setTakenDate(todayStr());
+    setTakenDate(selectedDate);
     setTakenAmount(1);
   }
 
@@ -110,6 +121,7 @@ export function ScheduleView() {
       const allLogs = await db.dose_logs.toArray();
       await recalculate(allLogs, medications);
       await loadAll();
+      await loadSelectedLogs(selectedDate);
       setTakenSlot(null);
       triggerReaction("⭐");
       addSegment();
@@ -137,6 +149,7 @@ export function ScheduleView() {
       const allLogs = await db.dose_logs.toArray();
       await recalculate(allLogs, medications);
       await loadAll();
+      await loadSelectedLogs(selectedDate);
       if (status === "skipped") triggerReaction("😕");
     } finally {
       setBusySlot(null);
@@ -149,13 +162,14 @@ export function ScheduleView() {
       await deleteLog(logId);
       const allLogs = await db.dose_logs.toArray();
       await recalculate(allLogs, medications);
+      await loadSelectedLogs(selectedDate);
     } finally {
       setBusySlot(null);
     }
   }
 
   function getLog(medicationId: string, scheduledFor: string) {
-    return todayLogs.find(
+    return selectedLogs.find(
       (l) => l.medicationId === medicationId && l.scheduledFor === scheduledFor,
     );
   }
@@ -182,15 +196,26 @@ export function ScheduleView() {
       {/* Header */}
       <div className="rounded-xl bg-white p-4 shadow-sm border border-slate-200 mb-6">
         <p className="text-sm text-slate-500">
-          {new Date().toLocaleDateString("en-US", {
+          {new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-US", {
             weekday: "long",
             month: "long",
             day: "numeric",
           })}
         </p>
-        <h1 className="text-xl font-bold text-slate-800">Today's Schedule</h1>
+        <h1 className="text-xl font-bold text-slate-800">Schedule</h1>
+        <div className="mt-2 max-w-xs">
+          <label className="block text-xs font-medium text-slate-600">
+            Date
+            <input
+              type="date"
+              className="mt-1 w-full rounded-md border border-slate-300 bg-white p-1.5 text-sm"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+            />
+          </label>
+        </div>
         <p className="mt-1 text-sm text-slate-600">
-          {takenCount} of {totalScheduled} doses taken today
+          {takenCount} of {totalScheduled} doses taken
         </p>
         <div className="mt-2 h-2 w-full rounded-full bg-slate-200">
           <div
@@ -224,7 +249,7 @@ export function ScheduleView() {
               const isBusy = busySlot === slotKey;
               const showTakenForm = takenSlot === slotKey;
               const isNext = idx === nextIdx;
-              const isPast = time < nowHHMM() && !existingLog;
+              const isPast = selectedDate === today && time < nowHHMM() && !existingLog;
 
               // Dot appearance
               let dotClass =
@@ -294,7 +319,7 @@ export function ScheduleView() {
                         )}
                         {existingLog?.status === "taken" && existingLog.takenAt && (
                           <p className="text-xs text-green-700 mt-0.5">
-                            Taken{existingLog.takenAt.slice(0, 10) !== today ? ` on ${existingLog.takenAt.slice(0, 10)}` : ""}{" "}
+                            Taken{existingLog.takenAt.slice(0, 10) !== selectedDate ? ` on ${existingLog.takenAt.slice(0, 10)}` : ""}{" "}
                             at {formatTime(existingLog.takenAt.slice(11, 16))}
                             {existingLog.pillAmount && existingLog.pillAmount !== 1
                               ? ` · ${existingLog.pillAmount === 0.5 ? "½" : "¼"} pill`
