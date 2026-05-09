@@ -4,12 +4,12 @@ import type { PetStats } from "../../db";
 
 const moodConfig: Record<
   PetStats["mood"],
-  { bodyColor: string; label: string; emoji: string; animDuration: string }
+  { bodyColor: string; label: string; emoji: string; animDuration: string | null }
 > = {
   happy:   { bodyColor: "#4ade80", label: "Feeling happy!",  emoji: "🎉", animDuration: "0.5s" },
   neutral: { bodyColor: "#a3e635", label: "Feeling okay",    emoji: "😐", animDuration: "1.2s" },
   sad:     { bodyColor: "#facc15", label: "Feeling sad",     emoji: "😔", animDuration: "2.5s" },
-  sick:    { bodyColor: "#9ca3af", label: "Not well",        emoji: "😷", animDuration: "none" },
+  sick:    { bodyColor: "#9ca3af", label: "Not well",        emoji: "😷", animDuration: null },
 };
 
 function CaterpillarSvg({ mood }: { mood: PetStats["mood"] }) {
@@ -132,7 +132,7 @@ export function PetView() {
   }
 
   const animStyle: React.CSSProperties =
-    stats.mood === "sick"
+    cfg.animDuration === null
       ? {}
       : {
           animation: `wiggle ${cfg.animDuration} ease-in-out infinite alternate`,
