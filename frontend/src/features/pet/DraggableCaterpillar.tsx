@@ -8,9 +8,14 @@ const SPEED = 1.2; // px per RAF frame (~72px/s @60fps)
 const RANDOM_TURN_CHANCE = 0.003;
 const SAFE_MARGIN = 90; // keep head center away from hard screen edges
 const CORNER_BUFFER = 120; // steer away before entering corner traps
-const SEGMENT_GAP = 26; // distance between snake segments
-// CaterpillarSvg viewBox is 260 wide and tail segment radius is 11 (diameter 22).
-const ORIGINAL_TAIL_SEGMENT_SIZE = (HEAD_SIZE * 22) / 260;
+const SVG_VIEWBOX_WIDTH = 260;
+const SVG_CENTER_X = SVG_VIEWBOX_WIDTH / 2;
+const SVG_TAIL_CENTER_X = 215;
+const ORIGINAL_TAIL_SEGMENT_SIZE = (HEAD_SIZE * 22) / SVG_VIEWBOX_WIDTH; // tail diameter in px
+const SEGMENT_START_OFFSET =
+  (HEAD_SIZE * (SVG_TAIL_CENTER_X - SVG_CENTER_X)) / SVG_VIEWBOX_WIDTH +
+  ORIGINAL_TAIL_SEGMENT_SIZE * 0.9; // attach right after SVG tail
+const SEGMENT_GAP = ORIGINAL_TAIL_SEGMENT_SIZE * 0.82; // small overlap for connected body
 
 // right, down, left, up
 const DIRS = [
@@ -61,6 +66,10 @@ function pointAlongHistory(history: Vec[], distanceFromHead: number): Vec {
   }
 
   return history[history.length - 1];
+}
+
+function segmentDistanceFromHead(segmentIdx: number): number {
+  return SEGMENT_START_OFFSET + segmentIdx * SEGMENT_GAP;
 }
 
 function chooseWallTurn(
@@ -126,7 +135,9 @@ export function DraggableCaterpillar() {
     setRender({
       head: start,
       dirIdx: dirIdxRef.current,
-      body: Array.from({ length: segmentCount }, (_, i) => pointAlongHistory(historyRef.current, (i + 1) * SEGMENT_GAP)),
+      body: Array.from({ length: segmentCount }, (_, i) =>
+        pointAlongHistory(historyRef.current, segmentDistanceFromHead(i)),
+      ),
     });
   }, [segmentCount]);
 
@@ -193,7 +204,8 @@ export function DraggableCaterpillar() {
       // prepend head position to movement history
       historyRef.current.unshift(headRef.current);
 
-      const maxHistoryDistance = (segmentCount + 4) * SEGMENT_GAP;
+      const maxHistoryDistance =
+        SEGMENT_START_OFFSET + (segmentCount + 4) * SEGMENT_GAP;
       let accumulated = 0;
       let trimIndex = historyRef.current.length;
       for (let i = 1; i < historyRef.current.length; i++) {
@@ -208,7 +220,7 @@ export function DraggableCaterpillar() {
       }
 
       const body = Array.from({ length: segmentCount }, (_, i) =>
-        pointAlongHistory(historyRef.current, (i + 1) * SEGMENT_GAP),
+        pointAlongHistory(historyRef.current, segmentDistanceFromHead(i)),
       );
 
       setRender({
