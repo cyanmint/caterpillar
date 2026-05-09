@@ -47,4 +47,4 @@ caterpillar/
 ## Notes
 - Mobile-first layout should use safe viewport units (`100dvh`) and touch-sized controls.
 - Keep high-contrast mode and larger tap targets enabled through design tokens in `frontend/src/styles`.
-- Store SVG blobs in R2, and metadata/index rows in D1 for search/import.
+- Store SVG pill templates directly in D1 for unified search/import metadata and simplified deployment.

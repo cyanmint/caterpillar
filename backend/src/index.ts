@@ -1,6 +1,5 @@
 export interface Env {
   DB: D1Database;
-  PILL_TEMPLATES_BUCKET: R2Bucket;
   ALLOWED_ORIGIN?: string;
   PILL_TEMPLATE_SUBMIT_TOKEN?: string;
 }
@@ -11,6 +10,8 @@ type PillDivider = "none" | "half" | "quarter";
 interface PillTemplateSubmission {
   ownerUserId: string;
   drugName: string;
+  dosageLabel?: string;
+  pillsPerBox?: number;
   shape: PillShape;
   primaryColor: string;
   secondaryColor?: string;
@@ -64,6 +65,8 @@ function parseSubmission(input: unknown): PillTemplateSubmission | null {
   const parsed: PillTemplateSubmission = {
     ownerUserId: String(body.ownerUserId ?? "").trim(),
     drugName: String(body.drugName ?? "").trim(),
+    dosageLabel: typeof body.dosageLabel === "string" ? body.dosageLabel.trim() : undefined,
+    pillsPerBox: typeof body.pillsPerBox === "number" ? body.pillsPerBox : undefined,
     shape: body.shape as PillShape,
     primaryColor: String(body.primaryColor ?? "").trim(),
     secondaryColor: typeof body.secondaryColor === "string" ? body.secondaryColor.trim() : undefined,
@@ -75,6 +78,7 @@ function parseSubmission(input: unknown): PillTemplateSubmission | null {
   if (!parsed.ownerUserId || !parsed.drugName || !parsed.svgMarkup) return null;
   if (!["oblong", "round", "capsule", "triangular"].includes(parsed.shape)) return null;
   if (!["none", "half", "quarter"].includes(parsed.divider)) return null;
+  if (parsed.pillsPerBox !== undefined && (!Number.isInteger(parsed.pillsPerBox) || parsed.pillsPerBox <= 0)) return null;
   if (!isValidHexColor(parsed.primaryColor)) return null;
   if (parsed.secondaryColor && !isValidHexColor(parsed.secondaryColor)) return null;
   if (parsed.svgMarkup.length > MAX_SVG_SIZE_BYTES) return null;
@@ -123,31 +127,24 @@ export default {
     }
 
     const templateId = crypto.randomUUID();
-    const r2Key = `pill-templates/${templateId}.svg`;
     const now = new Date().toISOString();
-
-    await env.PILL_TEMPLATES_BUCKET.put(r2Key, submission.svgMarkup, {
-      httpMetadata: { contentType: "image/svg+xml" },
-      customMetadata: {
-        drugName: submission.drugName,
-        shape: submission.shape,
-      },
-    });
 
     await env.DB.prepare(
       `INSERT INTO pill_templates
-      (id, owner_user_id, drug_name, shape, primary_color, secondary_color, divider, svg_r2_key, is_public, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, owner_user_id, drug_name, dosage_label, pills_per_box, shape, primary_color, secondary_color, divider, svg_markup, is_public, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         templateId,
         submission.ownerUserId,
         submission.drugName,
+        submission.dosageLabel ?? null,
+        submission.pillsPerBox ?? null,
         submission.shape,
         submission.primaryColor,
         submission.secondaryColor ?? null,
         submission.divider,
-        r2Key,
+        submission.svgMarkup,
         submission.isPublic ? 1 : 0,
         now,
         now,
@@ -159,11 +156,13 @@ export default {
       {
         id: templateId,
         drugName: submission.drugName,
+        dosageLabel: submission.dosageLabel ?? null,
+        pillsPerBox: submission.pillsPerBox ?? null,
         shape: submission.shape,
         divider: submission.divider,
         primaryColor: submission.primaryColor,
         secondaryColor: submission.secondaryColor ?? null,
-        svgR2Key: r2Key,
+        svgMarkup: submission.svgMarkup,
         createdAt: now,
       },
       corsHeaders,

@@ -1,0 +1,10 @@
+{
+  "name": "caterpillar",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "frontend": "npm --prefix frontend run build",
+    "backend": "npm --prefix backend run build",
+    "deploy": "npm --prefix backend run deploy"
+  }
+}
