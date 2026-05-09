@@ -92,6 +92,11 @@ export function DraggableCaterpillar() {
   const mood = usePetStore((s) => s.stats.mood);
   const reactionEmoji = usePetStore((s) => s.reactionEmoji);
   const segmentCount = usePetStore((s) => s.segments);
+  const initialSegmentCountRef = useRef<number | null>(null);
+
+  if (initialSegmentCountRef.current === null) {
+    initialSegmentCountRef.current = segmentCount;
+  }
 
   const dragHandleRef = useRef<HTMLDivElement>(null);
 
@@ -108,10 +113,15 @@ export function DraggableCaterpillar() {
     body: [],
   });
 
-  const bodySizes = useMemo(
-    () => Array.from({ length: segmentCount }, (_, i) => Math.max(26, 56 - i * 2)),
-    [segmentCount],
-  );
+  const bodySizes = useMemo(() => {
+    const baseCount = Math.max(1, initialSegmentCountRef.current ?? 1);
+    const baseSizes = Array.from({ length: baseCount }, (_, i) => Math.max(26, 56 - i * 2));
+    const tailSize = baseSizes[baseSizes.length - 1] ?? 26;
+
+    return Array.from({ length: segmentCount }, (_, i) =>
+      i < baseCount ? baseSizes[i] : tailSize,
+    );
+  }, [segmentCount]);
 
   useEffect(() => {
     const start: Vec = {
