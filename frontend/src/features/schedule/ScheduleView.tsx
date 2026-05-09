@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMedStore } from "../../stores/useMedStore";
 import { usePetStore } from "../../stores/usePetStore";
 import { PillSvgPreview } from "../pills/PillEditor";
 import { db, type DoseLog } from "../../db";
+import { CaterpillarSvg, moodConfig } from "../pet/CaterpillarSvg";
 
 function formatTime(hhmm: string): string {
   const [h, m] = hhmm.split(":").map(Number);
@@ -49,6 +50,7 @@ export function ScheduleView() {
   const consumePill = useMedStore((s) => s.consumePill);
   const loadAll = useMedStore((s) => s.loadAll);
   const recalculate = usePetStore((s) => s.recalculate);
+  const petStats = usePetStore((s) => s.stats);
 
   const today = todayStr();
   const activeMeds = medications.filter((m) => m.isActive);
@@ -62,6 +64,16 @@ export function ScheduleView() {
   const [takenDate, setTakenDate] = useState(todayStr());
   const [takenAmount, setTakenAmount] = useState<PillAmount>(1);
   const [busySlot, setBusySlot] = useState<string | null>(null);
+
+  // Pet reaction state
+  const [reactionEmoji, setReactionEmoji] = useState<string | null>(null);
+  const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function triggerReaction(mood: typeof petStats.mood) {
+    if (reactionTimer.current) clearTimeout(reactionTimer.current);
+    setReactionEmoji(moodConfig[mood].emoji);
+    reactionTimer.current = setTimeout(() => setReactionEmoji(null), 2000);
+  }
 
   interface Slot {
     medicationId: string;
@@ -109,6 +121,7 @@ export function ScheduleView() {
       await recalculate(allLogs, medications);
       await loadAll();
       setTakenSlot(null);
+      triggerReaction(petStats.mood);
     } finally {
       setBusySlot(null);
     }
@@ -174,26 +187,57 @@ export function ScheduleView() {
 
   return (
     <div className="flex flex-col gap-0 p-4">
+      {/* Keyframes for reaction burst */}
+      <style>{`
+        @keyframes floatUp {
+          0%   { opacity: 1; transform: translateY(0) scale(1); }
+          80%  { opacity: 1; transform: translateY(-28px) scale(1.3); }
+          100% { opacity: 0; transform: translateY(-36px) scale(1.1); }
+        }
+        .reaction-burst { animation: floatUp 2s ease-out forwards; }
+      `}</style>
+
       {/* Header */}
       <div className="rounded-xl bg-white p-4 shadow-sm border border-slate-200 mb-6">
-        <p className="text-sm text-slate-500">
-          {new Date().toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-          })}
-        </p>
-        <h1 className="text-xl font-bold text-slate-800">Today's Schedule</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          {takenCount} of {totalScheduled} doses taken today
-        </p>
-        <div className="mt-2 h-2 w-full rounded-full bg-slate-200">
-          <div
-            className="h-2 rounded-full bg-green-500 transition-all"
-            style={{
-              width: totalScheduled > 0 ? `${(takenCount / totalScheduled) * 100}%` : "0%",
-            }}
-          />
+        <div className="flex items-start justify-between gap-3">
+          {/* Text side */}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-slate-500">
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
+            </p>
+            <h1 className="text-xl font-bold text-slate-800">Today's Schedule</h1>
+            <p className="mt-1 text-sm text-slate-600">
+              {takenCount} of {totalScheduled} doses taken today
+            </p>
+            <div className="mt-2 h-2 w-full rounded-full bg-slate-200">
+              <div
+                className="h-2 rounded-full bg-green-500 transition-all"
+                style={{
+                  width: totalScheduled > 0 ? `${(takenCount / totalScheduled) * 100}%` : "0%",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Pet icon + reaction */}
+          <div className="relative flex-shrink-0 w-20">
+            <CaterpillarSvg mood={petStats.mood} className="w-20 h-auto" />
+            {reactionEmoji && (
+              <span
+                key={reactionEmoji + Date.now()}
+                className="reaction-burst absolute -top-2 left-1/2 -translate-x-1/2 text-2xl pointer-events-none select-none"
+              >
+                {reactionEmoji}
+              </span>
+            )}
+            <p className="text-center text-[0.6rem] text-slate-500 leading-tight mt-0.5 truncate">
+              {petStats.petName}
+            </p>
+          </div>
         </div>
       </div>
 
