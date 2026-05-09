@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "workspaces": ["frontend"],
   "scripts": {
-    "build": "echo 'Frontend build scaffold ready' && mkdir -p frontend/dist",
+    "build": "npm --workspace caterpillar-frontend run build",
     "build:backend": "wrangler deploy --dry-run --config backend/wrangler.jsonc",
     "deploy": "wrangler deploy --config backend/wrangler.jsonc",
-    "dev": "wrangler dev --config backend/wrangler.jsonc"
+    "dev": "wrangler dev --config backend/wrangler.jsonc",
+    "frontend": "npm --workspace caterpillar-frontend run dev"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
